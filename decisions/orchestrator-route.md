@@ -18,4 +18,15 @@
 - WHY + 被否方案（Grok 提议 native agent 委派替换）原始讨论 → `3rd-ppt/【Mc-debug】/Mc-debug-1.md` L589「grok」段
 - "全局迭代为何收敛慢 → 改局部自检" → `Mc-debug-1.md` L493 + `Mc-debug-2.md` L2423
 
+## 补充（2026-06-01）：协作 ≠ 控制 —— 为何 Agent Teams 出现后 orchestrator.py 仍不可替
+
+评估官方 Agent Teams 能否取代 orchestrator.py 后的结论（也是 ROI 闸门 #1 回放）：
+
+- **Agent Teams 真实存在但官方自列不稳**（会话恢复/任务协调/关闭行为）；本机 Windows Terminal 跑不了 split-pane → 只能 in-process，而 **in-process 队员不能 `/resume`/`/rewind`**（会话一断队员全没）。官方明确反对长时间无人值守。
+- **hooks（TeammateIdle/TaskCreated/TaskCompleted + exit 2 返工）是原生硬控制中间路**，能做"测试不过不许完成"的硬质量门，**但单事件无状态**——做不了"跨多次重试累计到 3"这类计数（要外部计数文件 = 迷你 orchestrator）。
+- **核心判断**：协作（软/发散/对话）与控制（硬/确定/计数）是**正交**两件事。"失败恰好 3 次上报"是确定性计数器需求，LLM 会因 context 压缩丢计数、因"再试一次"倾向不在阈值硬停。**orchestrator.py 不是"成熟即扔的拐杖"**——成熟修的是 bug，不会把概率裁判变成确定保证（类比再强的人类团队也仍跑确定性 CI）。
+
+→ 强化本卡主结论 + [[acceptance-guardrails]] 护栏②（重试硬上限）：确定性硬流程控制永久保留 Python。
+原档：`Mc-emoji/.claude/CLAUDE.md` 2026-06-01 教训 + 续；`Mc-emoji/[feature-03]/grok-01/02-...chat.md` + `Mc未来思考3...ADV.md`
+
 相关决策：[[acceptance-guardrails]]（三护栏锁薄度下限）、[[per-agent-memory-no]]（同期 agent 架构决策）；偏好底座 [[../principles]]
