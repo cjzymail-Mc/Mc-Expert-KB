@@ -15,6 +15,6 @@
 
 ## Stage 0 状态
 - ✅ 去重 / principles / decisions×3（含互链）/ reflexes / repo-map / 溯源子索引
-- ✅ 孤儿审计（6 大档）— 收割「少做」原则入 principles；候选 B（统一入口）待拍板
+- ✅ 孤儿审计（6 大档）— 收割「少做」原则入 principles；候选 B（统一入口）已否决（仅 fangcaixia 成立，非普适，与 orchestrator-route 冲突）
 - ⏳ GitHub private remote + 首 push
 - ROI 闸门（§5）：orchestrator 切片已通过（见 Mc-emoji spike）；待补 Agent Teams / PPT→HTML 两个回放

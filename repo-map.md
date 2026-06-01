@@ -40,4 +40,4 @@
 > 孤儿审计（step 6b，深读 6 个 ≥100KB 大档找未蒸馏决策）状态：**已执行 2026-06-01**。
 > 结果：绝大多数已蒸馏 / 属域内细节。收割孤儿 2 个：
 > - ✅ 候选 A「少做」原则 → 已入 `principles.md`（3rd-ppt Mc-debug-6 L1439/1598/1624）
-> - ⏳ 候选 B「主 Claude 即统一入口」（Agent-3 mc-debug5 L3156）→ 与 orchestrator-route 重叠，待用户拍板是否单独立卡
+> - ❌ 候选 B「主 Claude 即统一入口」（Agent-3 mc-debug5 L3156）→ **已否决，不入库**。仅 **fangcaixia 项目**成立（该 repo 生产必须 LLM 介入），**非普适**；且与 [[decisions/orchestrator-route]]「确定性 Python > LLM 委派」方向相反。强行入库会制造自相矛盾的伪决策。属域内细节，留 Agent-3/fangcaixia 原地。
