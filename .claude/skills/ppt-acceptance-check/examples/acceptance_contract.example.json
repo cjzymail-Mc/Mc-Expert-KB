@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "data_sources": {
+    "excel": "C:/path/to/source.xlsx"
+  },
+  "shape_pairing": {
+    "strategy": "fuzzy",
+    "rules": [
+      "strip_clone_suffix",
+      "ignore_chart_auto_renumber"
+    ],
+    "manual_overrides": {
+      "p13": {
+        "Chart 8": "Chart 63"
+      }
+    }
+  },
+  "tolerances": {
+    "geometry_px": 2.0,
+    "font_size_pt": 0.5,
+    "color_rgb_distance": 0,
+    "ssim_threshold": 0.96
+  },
+  "rules": [
+    {
+      "id": "chart63_temp_range",
+      "shape": "Chart 63",
+      "layer": "L1",
+      "check": "chart_series_values",
+      "expected_from": "excel:服装试穿问卷--紧身背心:AD,AE:range",
+      "severity": "must_fix"
+    },
+    {
+      "id": "tbx50_temp_mode",
+      "shape": "TextBox 50",
+      "layer": "L1",
+      "check": "text_equals_computed",
+      "expected_from": "excel:服装试穿问卷--紧身背心:AD:mode",
+      "severity": "must_fix"
+    },
+    {
+      "id": "gpt_strengths_color_runs",
+      "shape": "TextBox 23",
+      "layer": "L3",
+      "check": "has_color_runs",
+      "expected_min": 2,
+      "severity": "must_fix",
+      "skip_if_trace": "gpt_strengths.called == false"
+    },
+    {
+      "id": "gpt_must_be_called",
+      "layer": "L4",
+      "check": "trace_event_present",
+      "expected_events": ["gpt_strengths", "gpt_drawbacks", "gpt_subject_info"],
+      "severity": "must_fix",
+      "scope": "production"
+    },
+    {
+      "id": "no_silent_com_failure",
+      "layer": "L4",
+      "check": "no_trace_event",
+      "forbidden_events": ["com_api_failed_but_continued"],
+      "severity": "must_fix"
+    },
+    {
+      "id": "geometry_global",
+      "shape": "*",
+      "layer": "L2",
+      "check": "geometry_within_tolerance",
+      "severity": "must_fix"
+    },
+    {
+      "id": "autosize_global",
+      "shape": "*",
+      "layer": "L2",
+      "check": "autosize_matches_template",
+      "severity": "warn"
+    }
+  ],
+  "modes": {
+    "smoke": {
+      "rule_overrides": {
+        "gpt_must_be_called": "tolerate",
+        "gpt_strengths_color_runs": "tolerate"
+      }
+    },
+    "production": {}
+  }
+}

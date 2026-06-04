@@ -16,12 +16,13 @@
 ## Mc-emoji — Claude Code 学习/实验
 - **主题**：CC 能力探索；权限系统实测（方案 A）；Agent Teams 教训；会话迁移工具；DLP/COM 硬规则。
 - **memory**：根 `CLAUDE.md` + `.claude/CLAUDE.md`（硬规则）
-- **关键档案**：`[feature-02-auto-Enter]/bypass-plan-discussion.md`、`settings-fix-plan.md`、`[feature-03-take-a-nap]/Mc未来思考3...ADV.md`、`grok-01/02-...chat.md`
+- **关键档案**：`[feature-02-auto-Enter]/bypass-plan-discussion.md`、`settings-fix-plan.md`、`[feature-03-take-a-nap]/Mc未来思考3...ADV.md`、`grok-01/02-...chat.md`、`[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`(Team spike：三角色工作流/落点规范/放权深度)、`grok+claude-03-...chat.md`
+- **Agent Teams 机制事实**：KB 内 `references/agent-teams.md` —— 含 **「新手 FAQ」节**（2026-06-02，首次用 team 7 条入门：env=1 不自动组队/lead 一次性+progress.md/token 单账号/lead 放权深度/teammate 不能跑非 Claude 模型/team×worktree 正交/teammate 默认模型）
 
 ## 其他（按需）
 - **[Agent-4] Wu Prj**：`skills/office-via-com.md`（COM 手册出处之一）
 - **xiaoduo-Excel task**：Excel 任务
-- **~/.claude/skills/**：11 全局 skill（office-com-helpers / inspect-* / ppt-acceptance-check / ldterm-decrypt-images / three-state-coloring-contract…）
+- **~/.claude/skills/**：14 全局 skill（office-com-helpers / inspect-*（ppt/excel/word）/ ppt-acceptance-check / excel-acceptance-check / ldterm-decrypt-images / pipeline-self-check-loop / com-survival-reflexes / read-selected-shape / team-task / claude-md-three-layer-refactor / **three-state-coloring-contract 已拆双子：`-word-only`（单通道 HighlightColorIndex）+ `-excel-only`（底纹+字色双通道，2026-06-04 落地）**…）
 
 ---
 
@@ -36,6 +37,7 @@
 | 全局迭代收敛慢 → 改局部自检 | `Mc-debug-1.md` L493 + `Mc-debug-2.md` L2423 | 2026-04 |
 | 三重混合机制 = 任务路由器（非三层加权） | `Mc-debug-5-三重混合机制.md` | 2026-04 |
 | 多窗口/多 agent 工作流评估 | `Mc-emoji/[feature-03]/grok-01/02-...chat.md` | 2026-06-01 |
+| Agent Team 入门实测（机制澄清/落点/放权/智谱混合否决） | `Mc-emoji/[feature-03]/grok+claude-03-...chat.md` + `sub-plan-stage3-agentteam-spike.md`；事实沉淀于 `references/agent-teams.md`「新手 FAQ」 | 2026-06-02 |
 
 > 孤儿审计（step 6b，深读 6 个 ≥100KB 大档找未蒸馏决策）状态：**已执行 2026-06-01**。
 > 结果：绝大多数已蒸馏 / 属域内细节。收割孤儿 2 个：

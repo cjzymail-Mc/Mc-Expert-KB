@@ -1,0 +1,53 @@
+中央 KB（本 repo）专用的固化/更新流程。**本 repo 不是普通工作 repo，是被策展的稳定层**——别套用通用 `mc-update`（那套 auto-memory/memory 归属、fix*.md、Mc-debug、STATE.md、feature 目录在这里都不适用）。
+
+> 立身原则：薄 / 稳定 / 人工策展 / 不污染源 repo / 做减法。依据 [[principles]] 入库判据 + [[decisions/kb-memory-boundary]]。
+
+## 第 0 步：要不要入 KB？（三重闸门，全过才写）
+
+KB **默认不入**——多一份 = 多一份维护负担、拉低信噪比。任务完成 ≠ KB 必有更新。
+
+1. **新增对照价值闸**（principles 三连问，任一"否"即不入）：
+   ① 引入既有 KB 没有的形态/对照点/边界条件？ ② 会被反复引用？ ③ 维护成本 < 新增价值？
+2. **频次闸**：这条 1 年内会被≥3 次需要吗？否（一次性反思 / git log 已是真相）→ 不写。
+3. **去重闸**：Grep 工具或 `rg '<topic>' principles.md reflexes.md repo-map.md decisions/ references/` —— 已完整覆盖 → 不写；部分覆盖 → append，**不另起新条目**；完全没有 → 才允许新建。
+
+> ⚠️ **domain 细节不入 KB**：具体染色契约 / 槽位坐标 / 某 COM quirk / 某条源 memory 原文 —— 留源 repo，`repo-map.md` 给指针即可。KB 只装"偏好/决策/反射 + 路标"。
+
+## 第 1 步：列候选等用户审核
+
+列出候选 + 拟落位的层，按重要性排序，**等用户挑**，不直接动手。
+
+## 第 2 步：KB 内容层归属
+
+| 内容性质 | 归属文件 | 卡片格式 |
+|--|--|--|
+| 用户决策偏好 / 跨主题元规则 | `principles.md` | 自由条目 + 用户原话 |
+| 跨 repo 已决决策（**不重判，互链**） | `decisions/<slug>.md` | 决策/日期/理由/现状/何时重新评估/原档指针/相关 |
+| 跨 repo 硬反射（**双 repo 命中**才算真反射，挂命中 repo） | `reflexes.md` | 一句反射 + 〔命中 repo〕 |
+| 源 repo 地图 / 决策溯源指针 | `repo-map.md` | 每 repo 一段 / 溯源表一行 |
+| 外部事实（CC 机制 / 权限 / API 等） | `references/<slug>.md` | **必标核实日期 + 易过期警示** |
+| KB 内务决策（如 memory 边界 / agent 部署） | `decisions/<slug>.md` | 同决策卡 |
+| 未晋升的原始反馈 | `.claude/auto-memory/`（**inbox，不是内容层、不进 KB git**） | 原样落，待晋升 |
+
+**红线**（[[decisions/kb-memory-boundary]]）：`.claude/auto-memory/` = 待审 inbox，**绝不自动 merge 进内容层**；晋升必须人工过第 0 步闸门。
+
+## 第 3 步：执行（仅对用户挑中的）
+
+1. 按去重闸落位：部分覆盖 → append；完全没有 → 才新建。
+2. 写文件：frontmatter（`name`/`description`/`type`）或决策卡格式；**互链** `[[name]]`（链相关偏好/决策/反射，链不存在的 slug 也行=标记待写）。
+3. **更新 `MEMORY.md` 索引**（这是每会话加载的总索引）：加一行 `- [Title](path) — hook`，分类正确（核心文档 / decisions / references / agents / Stage 状态）。
+4. references 类：核实日期 + "易过期"一行 + Stage 复核指针（若承重某决策）。
+5. **`.gitignore` 边界自检**：新增是**内容层**(principles/decisions/reflexes/repo-map/references/MEMORY.md/CLAUDE.md/agents) → 该进 git；是 **inbox/工具/scratch**(auto-memory/commands/skills/todays-task) → 该忽略。新增类别若不在 .gitignore 覆盖内，提示用户补。
+6. **`CLAUDE.md` 同步检查**（保持薄！）：仅当新增**顶级结构** / **新边界规则** / **新导航入口**时才动 CLAUDE.md，且**只加指针,绝不复制内容**（违反就是它自己禁的"别散在 CLAUDE.md"）。
+7. 挪/删文件后 grep dangling 互链并修；凝固态档案（已封决策卡的主体）不回溯篡改，只改头部状态。
+
+## 反例（KB 专属）
+
+- ❌ 默认入库 / 任务完成必更新 KB（KB 做减法，git log + 源 repo 已是真相）
+- ❌ 把 domain 细节复制进 KB（该留源 repo，repo-map 给指针）
+- ❌ auto-memory 自动并入内容层（违 kb-memory-boundary 物理隔离）
+- ❌ 重新辩论已封的 decisions/（要推翻才动，否则只互链引用）
+- ❌ references 不标核实日期 / 不标易过期
+- ❌ CLAUDE.md 里塞 principles/reflexes 内容副本（双份漂移）
+- ❌ 同主题已有条目还新建近似条目（该 append 就 append）
+- ❌ 删/移文件不更新 MEMORY.md 索引与互链（dangling）

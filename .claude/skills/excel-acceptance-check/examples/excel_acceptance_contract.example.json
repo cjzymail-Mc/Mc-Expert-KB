@@ -1,0 +1,63 @@
+{
+  "_comment": "excel-acceptance-check 契约示例。把 <...> 占位符换成真实路径/sheet/列。锚点优先级 name(NamedRange) > sheet+列名/cell(A1) > 行列数字(禁)。护栏①：L1 业务期望值走 expected_from 的 excel: DSL 从外部真相 xlsx 取，禁 hardcode 工艺单具体值；结构性断言(L0)可 inline。",
+  "version": 1,
+  "data_sources": {
+    "_comment": "excel: DSL 的外部真相源（如评审表/规格表）。给绝对路径。",
+    "excel": "<绝对路径>/QXB023252210、QXB023252211评审表.xlsx"
+  },
+  "structure": {
+    "header_row": 1
+  },
+  "rules": [
+    {
+      "id": "L0_bom_sheet_exists",
+      "layer": "L0",
+      "check": "sheet_exists",
+      "sheet": "BOM",
+      "severity": "must_fix",
+      "_note": "sheet 名模糊匹配：'BOM' 命中 '正式BOM'"
+    },
+    {
+      "id": "L0_bom_dims_min",
+      "layer": "L0",
+      "check": "dimensions_min",
+      "sheet": "BOM",
+      "expected": {"rows": 20, "cols": 10},
+      "severity": "must_fix"
+    },
+    {
+      "id": "L0_bom_title_has_token",
+      "layer": "L0",
+      "check": "has_columns",
+      "sheet": "BOM",
+      "expected": ["BOM"],
+      "severity": "warn",
+      "_note": "has_columns 子串匹配：第 1 行标题含 'BOM' 即过（BOM 首行是标题非规整表头，故设 warn）"
+    },
+    {
+      "id": "L1_dadi_matches_spec",
+      "layer": "L1",
+      "check": "cell_contains",
+      "sheet": "BOM",
+      "cell": "H4",
+      "expected_from": "excel_cell:QXB023252210:B5",
+      "severity": "must_fix",
+      "_note": "护栏① 单值外部真相（推荐写法）：期望=评审表 sheet QXB023252210 的 B5 单格(大底型号)；实际=待验收 BOM 的 H4(鞋底)须含之。excel_cell: DSL 取外部单格，不在契约里 hardcode 型号。"
+    },
+    {
+      "id": "L1_model_ref_count",
+      "layer": "L1",
+      "check": "column_agg_equals",
+      "sheet": "BOM",
+      "column": "C",
+      "agg": "count_contains=QXB023252210",
+      "expected_from": "excel:QXB023252210:B:count_contains=QXB023252210",
+      "severity": "warn",
+      "_note": "聚合型外部真相演示（warn 不阻断）：期望=评审表 B 列型号出现次数(1)；实际=BOM C 列型号出现次数。规格表登记一次、BOM 引用多次属正常，故 warn。"
+    }
+  ],
+  "modes": {
+    "smoke": {"rule_overrides": {}},
+    "production": {}
+  }
+}

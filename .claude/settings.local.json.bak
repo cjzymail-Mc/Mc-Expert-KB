@@ -1,0 +1,10 @@
+{
+  "env": {
+      "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    },
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; python \"skills/[memory-junction-for-3-account]/memory_junction_one_shot.py\")"
+    ]
+  }
+}
