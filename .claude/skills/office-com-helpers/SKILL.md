@@ -49,7 +49,7 @@ else:
 
 **为什么有这个**：本机 Ldterm 只对白名单 Office 进程的写加密，`python.exe` 写出是明文 → *已解密* 的 .xlsx/.pptx/.docx 可走 python 库提速 5–20×。但**不能假设文件默认解密**，碰文件**第一步永远先读 8 字节**判明文/密文。本函数把这个检测+路由收成一个 canonical 入口，密文时统一礼貌 STOP 而非让 python 崩。
 
-> **cn/coder-api 链路例外**（第二套降级版 team）：密文经 `~/.claude/scripts/run_cn_task.ps1` **确定性自动直穿 COM 读 helper，不停**（路由是脚本决策、非模型判断；COM 能透明读密文，无需人工解密）。**主环境 / 原 coder 链路仍 STOP 不变。** 出处见 `Mc-emoji/[feature-03-take-a-nap]/coder-api第二套team-实现交接spec.md` 拍板⑥。
+> **cn/coder-api 链路例外**（第二套降级版 team）：密文经 `~/.claude/skills/team-task-api/run_cn_task.ps1` **确定性自动直穿 COM 读 helper，不停**（路由是脚本决策、非模型判断；COM 能透明读密文，无需人工解密）。**主环境 / 原 coder 链路仍 STOP 不变。** 出处见 `Mc-emoji/[feature-03-take-a-nap]/coder-api第二套team-实现交接spec.md` 拍板⑥。
 
 **边界**（详见 `Mc-emoji/.claude/CLAUDE.md` 的「实测发现」卡）：① 是 fail-safe——任何不确定都回退 COM、绝不误判 python；② 仅覆盖"读/数据填充"，**视觉渲染/导 PNG/复杂染色仍走 COM**；③ python 明文输出仅限自用，对外交付物最终态仍要回 COM 出加密件；④ 单点实测（2026-06-03、当前 Ldterm 配置），不是永久保证。
 

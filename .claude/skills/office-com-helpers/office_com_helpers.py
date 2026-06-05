@@ -80,6 +80,10 @@ def detect_office_cipher(path) -> Tuple[str, str]:
           - "stop"   → 首字节确认 88 7D 1C Ldterm 密文 → 按硬规则 STOP：把路径+hex
                        报用户、等其用 DLP 工具解密。**禁** python 换库硬上。
                        （若调用方本就是 COM 路径，密文 COM 能透明读，按 COM 正常走即可。）
+                       【cn/coder-api 链路例外】密文经 ~/.claude/skills/team-task-api/run_cn_task.ps1
+                       由门脚本**确定性自动直穿 COM 读 helper、不停**（路由是脚本决策非模型
+                       判断）；此函数仍返回 "stop" 不变——例外在门脚本侧，别据本返回值在 cn
+                       链路里 STOP。主环境 / 原 coder 链路仍按 "stop" 停。见 SKILL.md 同条旁注。
           - "com"    → 既非明文也非已知密文头 / 读取失败 → 无法判定 → 保守回退 COM。
         reason: 人读的一句话，含首字节 hex，便于排查 / 报用户。
 
