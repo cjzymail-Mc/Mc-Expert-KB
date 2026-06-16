@@ -45,6 +45,7 @@
 - in-process teammate **不能 `/resume`/`/rewind` 恢复**（恢复后 lead 会去找已不存在的 teammate → 让它重新 spawn）。
 - 权限在 spawn 时定（继承 lead），spawn 后可改单个，但不能 spawn 时设 per-teammate。
 - 清理必须由 lead 跑（`Clean up the team`），且需先 shutdown 所有 teammate。
+- **崩溃/中断的 team 会在 `~/.claude/teams/{name}/config.json` 留残留状态 → 同名重建会撞车**；重启换个新 team-name（如 `excel-skill` → `excel-skill-2`）避开残留 config。〔Agent-4 mc-debug03 实测〕
 
 ## 新手 FAQ（2026-06-02 补，首次实测 + 官方文档核实）
 
@@ -82,5 +83,12 @@
 ## 与 subagent 的取舍（一句话）
 
 subagent = 单 session 内、只向主 agent 回报、主 agent 管全部、token 低；agent team = 各自独立 context、teammate 互发消息、共享 task list 自协调、token 显著更高。**需要互相讨论/挑战/自协调才上 team，否则用 subagent。**
+
+## solo vs 冷启动 team（什么时候**别**起队，2026-06 实战）
+
+- **握全量交接（team-progress 自足）+ 工作主体是直写代码 + 风险 COM 自检 → 优先 solo，别为"该用 team"另建冷启动 team。** spawn agent 每次冷启动、重推已有上下文，是最贵的路径；交接已自足时再起队 = 纯浪费。〔Agent-4 2026-06-03：旧 team 的 coder 正是冷启动卡死在 COM 阻塞，本会话 solo 反而两步跑通〕
+- 判据（全中才 solo）：① 已握全量上下文（交接自足 / 决策全锁，不必重跑 planner/mc-expert）；② 工作主体直写代码 + 自检，编排复杂度低。**反之值得 team**：上下文需多源汇聚 / 需并行多角色 / 决策未定需 mc-expert 挑战。
+- solo 也守 lead 职责：维护 team-progress 落盘、COM 套 20-30s 硬超时、连失 2 次 CUTOVER。
+- **关键验收门：solo 干多级验收时，每个 L 门交用户前先派 `mc-expert` 带验收背景陪审**——实证抓到过 lead 漏的 chart `.rels` 红线；mc-expert 标「必须补的动作」按阻塞项处理。〔Agent-4 `keygate-mc-expert-jury`〕
 
 相关：[[repo-map]]（Stage 3 指针）、[[decisions/orchestrator-route]]（编排权留主 Claude，team lead 不等于放权）、agent 本体 `.claude/agents/mc-expert.md`

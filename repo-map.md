@@ -1,7 +1,7 @@
 # repo-map.md — 源 repo 地图 + 决策溯源
 
 > 每 repo 一段（主题 + memory 路径 + 关键档案）。易变 domain 细节留原地，mc-expert 按需 `--add-dir` 直读，不复制进 KB。
-> 路径基址：`D:\Technique Support\Claude Code Learning\`
+> 路径基址：`D:\Downloads\Mc Claude Code Workshop\`（2026-06-15 订正：换机后实际位置）
 
 ## 3rd-ppt-prj — PPT 自动化生产线（最成熟蓝本）
 - **主题**：win32com + GPT 的 PPT 分析/移植/修复流水线；orchestrator + ppt-acceptance 验收门；染色契约。
@@ -19,8 +19,13 @@
 - **关键档案**：`[feature-02-auto-Enter]/bypass-plan-discussion.md`、`settings-fix-plan.md`、`[feature-03-take-a-nap]/Mc未来思考3...ADV.md`、`grok-01/02-...chat.md`、`[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`(Team spike：三角色工作流/落点规范/放权深度)、`grok+claude-03-...chat.md`
 - **Agent Teams 机制事实**：KB 内 `references/agent-teams.md` —— 含 **「新手 FAQ」节**（2026-06-02，首次用 team 7 条入门：env=1 不自动组队/lead 一次性+progress.md/token 单账号/lead 放权深度/teammate 不能跑非 Claude 模型/team×worktree 正交/teammate 默认模型）
 
+## [Agent-4] Wu Prj — 批量替代/改造产线（2026-06 最新富矿）
+- **主题**：N 份同构产物批量产线（竞品对比报告 / 文件替代 / 模板填充）；替代件身份治理（货号/款名/底模号以台账为真相源）；批量验收阶梯；台账↔产物对账；DLP/COM（旧机器语境）。
+- **memory**：`[Agent-4] Wu Prj/.claude/auto-memory/`（28）+ `.claude/memory/`（2）；另 `skills/office-via-com.md`（COM 手册出处之一）。
+- **关键档案**：`feedback_acceptance_ladder.md`(五级验收→KB `references/acceptance-ladder`)、`feedback_office_new_file_openpyxl.md`(新建走明文)、`feedback_solo_vs_cold_team.md` + `feedback_keygate_mc_expert_jury.md`(→KB `references/agent-teams`)、`feedback_sediment_two_tracks.md`(→KB `kb-memory-boundary`)、`feedback_derived_vs_curated_layer.md`、`feedback_pptx_rels_blindspot.md`、`feedback_marker_prefix_for_substitute.md`。
+- **域内细节留原地**（替代身份/.rels 清洗/染色/台账口径），mc-expert 按需 `--add-dir` 直读。
+
 ## 其他（按需）
-- **[Agent-4] Wu Prj**：`skills/office-via-com.md`（COM 手册出处之一）
 - **xiaoduo-Excel task**：Excel 任务
 - **~/.claude/skills/**：14 全局 skill（office-com-helpers / inspect-*（ppt/excel/word）/ ppt-acceptance-check / excel-acceptance-check / ldterm-decrypt-images / pipeline-self-check-loop / com-survival-reflexes / read-selected-shape / team-task / claude-md-three-layer-refactor / **three-state-coloring-contract 已拆双子：`-word-only`（单通道 HighlightColorIndex）+ `-excel-only`（底纹+字色双通道，2026-06-04 落地）**…）
 

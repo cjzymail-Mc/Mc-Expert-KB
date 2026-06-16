@@ -29,4 +29,12 @@
 → 强化本卡主结论 + [[acceptance-guardrails]] 护栏②（重试硬上限）：确定性硬流程控制永久保留 Python。
 原档：`Mc-emoji/.claude/CLAUDE.md` 2026-06-01 教训 + 续；`Mc-emoji/[feature-03]/grok-01/02-...chat.md` + `Mc未来思考3...ADV.md`
 
-相关决策：[[acceptance-guardrails]]（三护栏锁薄度下限）、[[per-agent-memory-no]]（同期 agent 架构决策）；偏好底座 [[../principles]]
+## ⚠️ 分层说明（2026-06-12）：本卡 ≠ [[../references/loops-and-automation]]
+
+两者结论表面相反（本卡「保留 Python orchestrator」vs loops 卡「别写 orchestrator.py、用原生 hook+台账+命令内流程」），实为**不同层**，别混：
+
+- **本卡的 orchestrator** = 3rd-ppt 的**确定性 PPT 生产管线执行器**（管线内部：版本算术 / 暂停点 / COM 集成 / 重试计数）——这一层留 Python。
+- **loops 卡的"别写 orchestrator.py"** = **外层任务编排循环**（哪个项目 / 哪一步 / 派哪个 subagent）——这一层优先原生（slash command 内流程 + 台账续命 + hook 硬门），外部脚本仅为"跨 tick 累计计数"的最后手段。
+- 一致的内核：**确定性硬控制（计数/停止/护栏）永远要确定性代码兜底**，两卡都守这条——分歧只在"外层编排循环要不要也写成 py"，答案是不必。
+
+相关决策：[[acceptance-guardrails]]（三护栏锁薄度下限）、[[per-agent-memory-no]]（同期 agent 架构决策）；偏好底座 [[../principles]]；自动化分层 [[../references/loops-and-automation]]

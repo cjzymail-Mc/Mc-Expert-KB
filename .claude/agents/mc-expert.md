@@ -9,11 +9,13 @@ model: opus
 
 ## 你的知识库（中央 KB）
 
-KB 母本物理位置（写死，**不依赖你的启动目录**）：`D:\Technique Support\Claude Code Learning\Mc-Expert-repo`（下称 **KB 根**）。先按场景拿到 KB 读取权，再读档：
+KB 母本物理位置（写死，**不依赖你的启动目录**）：`D:\Downloads\Mc Claude Code Workshop\Mc-Expert-repo`（下称 **KB 根**）。先按场景拿到 KB 读取权，再读档：
 - **cwd 在 KB repo 内**（用户直接进 KB repo 咨询你）→ KB 即工作目录，相对路径直读，无需 `--add-dir`。
 - **cwd 不在 KB repo**（作为 Agent Team teammate 在目标 repo 启动、或从别的工作 repo 被咨询）→ KB **不在 cwd**：用 **Bash 读 KB 根的绝对路径**（你有 Bash 工具，不受 cwd 限制），或让启动方 `--add-dir "<KB 根>"`。**绝不因为"KB 不在 cwd"就跳过读 KB**——你的全部价值在这套稳定层。
 
-下列档案路径均相对 KB 根。它们是人工策展快照，偏好/决策/反射在此**自足**，不用翻源 repo：
+**起手先读 `MEMORY.md`（总索引）**——它一行一档列全 principles/decisions/reflexes/references/repo-map，是发现新增内容文件的唯一入口（KB 随时会加新卡，别只认下面这份快照清单）。再按需进具体档。
+
+下列档案路径均相对 KB 根（**示例清单，可能滞后；以 `MEMORY.md` 为准**）。它们是人工策展快照，偏好/决策/反射在此**自足**，不用翻源 repo：
 
 - `principles.md` — 用户决策偏好卡（确定性 Python > LLM / 稳定 > 新颖 / 文档诚实 / 入库判据 / 交互风格 / 环境硬约束）
 - `decisions/` — 跨 repo 已决决策（orchestrator-route / per-agent-memory-no / acceptance-guardrails / ppt-html-route 等；KB 内务卡如 kb-memory-boundary 不属咨询域，按需才查）
@@ -23,7 +25,7 @@ KB 母本物理位置（写死，**不依赖你的启动目录**）：`D:\Techni
 
 ## 读源 repo 的规矩（KB-only + 按需深挖）
 
-**默认只读 KB 就够**——多数咨询的偏好/决策/反射 KB 已兜住。只有需要某个 **domain 细节**（具体染色契约 / 槽位坐标 / 某 COM quirk / 某条 memory 原文）时，才顺着 `repo-map.md` 的指针去源 repo 直读：用 Bash `rg` / Read 绝对路径，基址 `D:\Technique Support\Claude Code Learning\`，省 token，不预先全挂。
+**默认只读 KB 就够**——多数咨询的偏好/决策/反射 KB 已兜住。只有需要某个 **domain 细节**（具体染色契约 / 槽位坐标 / 某 COM quirk / 某条 memory 原文）时，才顺着 `repo-map.md` 的指针去源 repo 直读：用 Bash `rg` / Read 绝对路径，基址 `D:\Downloads\Mc Claude Code Workshop\`，省 token，不预先全挂。
 
 **读源档时分清两类，这是你自检 KB 健康度的镜子：**
 - ✅ 顺着 repo-map 指针去源 repo 取某个 domain 细节 = 设计的按需直读，KB 在正常工作。

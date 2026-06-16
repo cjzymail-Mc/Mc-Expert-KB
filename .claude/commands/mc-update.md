@@ -1,5 +1,9 @@
 任务完成后的文档更新流程。
 
+> **说明（user-scope 统一版）**：本文件是各 repo `mc-update.md` 的合并版，落地在 user-scope，所有 repo 共用；无本地覆盖。
+> - CLAUDE.md / STATE.md 章节号已去除，改为语义化引用（如"CLAUDE.md 命令表"）。各 repo 跑时按本地编号自行映射。
+> - 第 3 步 4e（顶级文件夹规约）按需触发：repo 有顶级文件夹硬底线才走，无则整段跳过；其中示例为 Agent-4 实际规约，其它 repo 不适用时忽略。
+
 ## 第 0 步：要不要固化？
 
 > 本流程是固化记忆的**唯一入口**（CLAUDE.md §0.2）：只在任务完成后走，任务途中一律不碰
@@ -35,7 +39,7 @@
 | 改动类型 | 写到 |
 |--|--|
 | 技术 bug + 代码修复 + 实证 | `[feature*]/fix*.md` |
-| 跨主题讨论 / 架构决策 / 架构精简 | `[feature*]/Mc-debug-*.md` 续写 |
+| 跨主题讨论 / 架构决策 / 架构精简 | 本 repo 的 Mc-debug 目录续写（顶级 `mc-debug/`、`【Mc-debug】/` 或 `[feature*]/` 下；续写不另起） |
 | 反复用得上的元规则 / 高频反射 | `.claude/memory/feedback_*.md` |
 | 无新规则可提炼（meta / process 改动） | 啥都不写（git log 即真相） |
 
@@ -45,11 +49,19 @@
 2. 写文件（frontmatter：`name` / `description` / `type`）
 3. 更新 MEMORY.md 索引（auto-memory 索引尤其精简，每会话都加载）
 4. **CLAUDE.md / STATE.md 同步检查**（必做，不是"如有"）：
-   - 4a 既有指针：grep 是否对得上新 memory 路径（auto-memory vs memory 路径不要错）
-   - 4b 结构性变更：本次任务有没有新建**顶级目录** / 新增**工作流场景** / 新增**跨 feature 约定**？→ CLAUDE.md §1 文件结构图加节点（注意：feature 内 schema 升版 / 脚本实现细节不入此表，写 `[feature*]/fix-*.md`）
-   - 4c 命令表：本次有没有新增 `/role-*` 或 slash command？→ CLAUDE.md §4 命令表 +1 行
-   - 4d 变更日志：4a-4c 任一触发 → `STATE.md §1 变更日志`表 +1 行（日期 + 简述）
-5. 挪/删文件后，grep dangling 引用并修复（凝固态档案除外：debug-*/plan-* 不回溯篡改）
+   - 4a **既有指针**：grep 是否对得上新 memory 路径（auto-memory vs memory 路径不要错）
+   - 4b **结构性变更**（**严判**：仅以下三类触发）：新建**顶级目录** / 新增**跨 feature 工作流场景** / 新增**跨 feature 约定** → CLAUDE.md 文件结构 / 详情索引相应章节加节点
+     - 反例（**不触发**）：feature 内 schema 升版、单 RD 脚本修复、内部脚本重命名、单个 memory 条目新增
+   - 4c **命令表**：本次有没有新增 `/role-*` 或 slash command？→ CLAUDE.md 命令表 +1 行
+   - 4d **变更日志**：4a-4c 任一触发 → **STATE.md 变更日志**表 +1 行（日期 + 简述）。**不是** CLAUDE.md（CLAUDE.md 是契约层，不维护 changelog；STATE.md 是状态层）
+   - 4e **顶级文件夹规约**（**可选段落**，仅当本 repo 有顶级文件夹硬底线时填写；无则整段删除）：
+     - 本次有没有顶级文件夹的新增 / 重命名 / 职责拆分？→ sync CLAUDE.md 顶级文件夹规约区 + STATE.md +1 行
+     - 调拨产物前先按本 repo 的硬底线归位，**禁止跨档塞文件**
+     - 示例（Agent-4 实际规约，其他 repo 请替换或删除）：
+       - `mc-plan/` — **仅** plan md（main-plan、sub-plan-NN-xxx），不放脚本/台账/产物
+       - `mc-progress/` — 执行产物（脚本、台账 xlsx、模板等），备份在 `mc-progress/backups/`
+       - `mc-debug/` — 架构讨论 / 计划制定 / 复盘类 md
+5. 挪/删文件后，grep dangling 引用并修复（凝固态档案除外：`*debug*` / `*plan*` / `fix*` 不回溯篡改；CLAUDE.md 末尾如已加重定向锚点则为旧 §引用兜底）
 
 ## 反例
 
@@ -62,3 +74,4 @@
 - ❌ meta/process 改动塞进 fix*.md（拉低 fix 文档信噪比）
 - ❌ 新建顶级目录或文件类型，但忘改 CLAUDE.md 文件结构图（下次会话拿到过时的项目地图）
 - ❌ 把 "如有 CLAUDE.md 指针就更新" 误读为 "没有就跳过"（实际：常常是该新增一条）
+- ❌ 把 changelog 行写进 CLAUDE.md（契约层不维护变更日志 → 写到 STATE.md 变更日志）

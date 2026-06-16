@@ -3,11 +3,16 @@
 > 反复命中、必须无条件遵守的硬反射。每条挂「命中 repo」——双 repo 命中 = 真·跨 repo 反射，不是单项目偶然。
 > 域内细节（染色契约 / 槽位 / 具体 COM quirk）不在此，留各源 repo。
 
-## 加密环境（Ldterm DLP）
+## Office 文件路径（2026-06-15 起：新机器，Ldterm DLP 已解除）
 
-- **COM-only**：Office（PPT/Excel/Word）读写必须走 win32com；**禁** python-pptx / openpyxl / olefile / docx 直碰加密文件。`win32com.Dispatch` = 启动白名单 Office 进程读明文。〔3rd-ppt + Agent-3〕
-- **`88 7D 1C` = 加密 → 立即 STOP**：碰任何二进制先读 8 字节；命中加密 magic 就停，报路径+hex 等用户解密。**不推测、不绕路、不换库重试**。Ldterm 加密的是整个 .pptx/.docx/.xlsx 文件头，不只是嵌入图。〔3rd-ppt + Agent-3〕
-- python 写出二进制后**核验首字节是明文 magic**（`%PDF`/`PK`/`PNG`）；纯文本豁免。〔Agent-3〕
+> ⚠️ **环境翻转**：旧机器是 Ldterm DLP（按进程名白名单的透明加密）→ 默认密文 → COM-only 铁律。**新机器 DLP 已解除**，前提"默认所有 Office 文件都加密"**不再成立**。下面是新机器的反射；旧铁律降级为历史/条件性回退（见末条）。
+
+- **默认走 Python**：Office（PPT/Excel/Word）读写**默认** python-pptx / openpyxl / python-docx，文件默认当**明文**处理；不再默认 COM。〔2026-06-15 环境变更〕
+  - **两条独立理由都指向"默认 Python"**：① 新机器 DLP 已解除（2026-06-15）；② 即便在 DLP 机器，只要文件已**手工预解密**，走 COM 反而帮倒忙——COM `SaveAs` 会把明文**反向加密回去**（输出 `88 7D 1C`），污染下游 Python 读取。〔Agent-4 CLAUDE.md §2，2026-06-09 拍板〕
+- **遇加密文件 = 例外 → 跳过 + 记录 + 报告用户**：碰二进制先读 8 字节；**非明文 magic**（`PK`/`%PDF`/`PNG` 等）即视为加密 → **跳过该文件、记下路径、汇报给用户**，**不 STOP 死等、不换库硬试、不绕路**。加密已是少数特例，不是常态。〔2026-06-15〕
+- **COM 仍保留的窄场景**：视觉渲染 / 导 PNG / 复杂染色 / 必须 COM 的产物；以及**条件性回退**——若又回到 DLP 机器，恢复旧铁律（COM-only + `88 7D 1C` STOP + 写后核明文）。
+- python 写出二进制后核验首字节是明文 magic（`%PDF`/`PK`/`PNG`）；纯文本豁免。〔Agent-3，仍有效〕
+- 〔历史〕**源 repo（3rd-ppt / Agent-3 / Agent-4）满地的 COM-only、`88 7D 1C` STOP 记忆都写于 Ldterm DLP 机器，属环境特定，不是新机器上的普适反射**——读源 repo 记忆时按此折算。
 
 ## 动手前
 
@@ -33,5 +38,6 @@
 
 - **PowerShell 含 `[]` 路径必须 `-LiteralPath`**：本项目所有 feature 在 `[featureNN-...]` 下，FS cmdlet 默认加 `-LiteralPath`，否则 `[]` 被当通配符报错。〔Agent-3 + 本次实测复现〕
 - **改 settings/配置先 .bak**；权限用方案 A，不主动开 bypassPermissions。〔Mc-emoji〕
+- **Git Bash 里 `python3` 是 WindowsApps stub，exit 49 静默失败**（不报错、无输出）——跑脚本/校验一律用 `python`；原生 python 不认 `/tmp`，临时文件走 Windows 路径（`tempfile.gettempdir()`）。〔Agent-4〕
 
 相关：偏好底座 [[principles]]；架构决策 [[decisions/orchestrator-route]] / [[decisions/acceptance-guardrails]]

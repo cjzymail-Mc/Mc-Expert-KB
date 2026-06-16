@@ -15,12 +15,13 @@
 
 > 判据一句话：**「跑业务流程要用的」进 KB；「修我自己这套多账号机器的」留检修箱。** 拿不准时默认不进 KB（呼应本 repo `decisions/kb-memory-boundary.md` 的「做减法」纪律）。
 
-## 当前清单（16）
+## 当前清单（17）
 
 COM/Office 底座：`office-com-helpers` `com-survival-reflexes` `ldterm-decrypt-images`
 文档体检/验收：`inspect-{excel,ppt,word}-template` `{excel,ppt}-acceptance-check` `ppt-visual-fidelity-check`(legacy，已被 `ppt-acceptance-check` 取代) `read-selected-shape` `pipeline-self-check-loop`
 染色契约：`three-state-coloring-contract-{excel,word}-only`
 team 执行：`team-task` `team-task-api`
+会话工程：`new-session`（清空/重开 session 前固化 plan + memory + 状态文件的交接入口）
 文档工程：`claude-md-three-layer-refactor`
 
 > 对照面（人工检修工具箱）：`Mc-emoji/--------- ★ Skills ★ ----------/README.md`

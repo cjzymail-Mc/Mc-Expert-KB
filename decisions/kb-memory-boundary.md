@@ -23,6 +23,11 @@
 
 **现状**：`.claude/auto-memory/` 已存在（3 账号 junction 同步，含 `feedback_ppt_selfcheck.md` + 自身 `MEMORY.md`）；KB `MEMORY.md` 已在记 Stage 0/1 状态 + 决策溯源。机制已在，本决策是**定位**而非新建。
 
+**沉淀节奏分两轨**（源 repo 通用，KB 晋升同理）：
+- **避坑类**（铁律/红线/易错点）→ **遇到即记** auto-memory inbox，**不等** 2-3 次（延后 = 下个 session clear 后必重踩）。
+- **流程类**（如何执行某流程）→ 先跑通，等 **2-3 次差异够大的独立任务**验证后再固化 skill（太早固化 = 过拟合单样本）。
+- 两轨用同一节奏处理是错的。〔Agent-4 `sediment-two-tracks`，2026-05-22 教训〕
+
 **何时重新评估**：inbox 长期积压无人晋升 → 考虑轻量 curator 流程；出现内容层被 auto 污染的实例 → 加硬校验（如 pre-commit 校验内容层只人工改）。当前都不需要。
 
 **原档指针**：本 session 讨论（2026-06-01，Stage 1 延伸）；入库判据原文见 [[../principles]]「入库/样本判据」段。
