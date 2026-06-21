@@ -25,4 +25,11 @@ model: sonnet
 
 ## 在 team 中
 
-从共享 task list 认领实现类任务（认领用文件锁，别和别人撞同一文件）；卡住就给 mc-expert（求历史经验）或 lead 发消息；高风险改动**等 plan approval** 再落。完成标记 + 通知 lead。
+从共享 task list 认领实现类任务（认领用文件锁，别和别人撞同一文件）；卡住就给 mc-expert（求历史经验）或 lead 发消息；高风险改动**等 plan approval** 再落。
+
+**里程碑汇报协议（防正文丢失，必守）**：mailbox 正文投递实测 flaky（同一 coder 同 session 既有完整正文到达、也有只到 idle 零正文），且长任务可能撞 session 限额中途被截断——故：
+1. **有文件产物的里程碑**：完整验证报告**先写盘**（plan 指定产物目录，无则与 `team-progress` 同级 `reports/`，命名 `<里程碑>-report.md`），**再 `SendMessage` 只发一行指针**：`<里程碑> done｜产物=<路径>｜报告=<路径>｜机器自检=PASS/FAIL（一句话）`。承重的是落盘文件——SendMessage 漏发/只到 idle，lead 也能读文件兜底。
+2. **无文件产物的里程碑（纯分析/校验）**：直接 `SendMessage` 发全文，别为落盘造空 report。
+3. **repo 无写产物约定（临时 repo）**：只 `SendMessage`，不强制落盘。
+4. **逼近 session 限额**：优先在被截断前把进度落盘（`<里程碑>-partial.md`），别赌能跑完。
+5. 指针里 `机器自检=PASS` 仅指机器门通过、**不等于人工验收**，别混称。

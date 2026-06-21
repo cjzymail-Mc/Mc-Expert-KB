@@ -17,7 +17,7 @@
 
 ## references/ — 事实手册
 - [cc-permissions](references/cc-permissions.md) — Claude Code 权限系统实测事实（方案 A + 5 个反直觉事实）
-- [agent-teams](references/agent-teams.md) — Agent Teams 机制核实（2026-06-01，易过期）：teammate 可引 project-scope agent（mc-expert 无需转 user 级）+ mailbox/task list 自动对话 + Windows 走 in-process + **solo vs 冷启动 team 判据 / 关键门派 mc-expert 陪审（2026-06）**
+- [agent-teams](references/agent-teams.md) — Agent Teams 机制核实（2026-06-01，易过期）：teammate 可引 project-scope agent（mc-expert 无需转 user 级）+ mailbox/task list 自动对话 + Windows 走 in-process + **solo vs 冷启动 team 判据 / 关键门派 mc-expert 陪审（2026-06）** + **idle-零正文：故障模型+兜底单一权威节（2026-06-18 实证）——显式 SendMessage 必要不充分（in-process 投递 flaky + 疑似 session 截断）、有产物角色落盘承重；旧 Q8「显式即解决/不需落盘」已订正为指针**
 - [acceptance-ladder](references/acceptance-ladder.md) — 批量产线验收 = 五级首件递进阶梯（映射→内容→渲染→项目级→批量抽检；首件挑最难样本）〔Agent-4，2026-06-12〕
 - [task-decomposition](references/task-decomposition.md) — 长链任务交底协议（信息三层 / 两段合同 plan 批准制 / 盘点先行+追问义务+拍板点封闭化 / 纠输入不纠输出）〔Agent-4，2026-06-10〕
 - [loops-and-automation](references/loops-and-automation.md) — CC 自动化/Loops 架构（loop↔skill 正交 / 复用单位是 skill 非 agent / 五件套 / 台账=程序计数器 / 续命≠触发 / 原生优先 orchestrator 最后手段 / 写操作不无人值守）〔Mc-emoji 思考6，2026-06-12〕
@@ -42,6 +42,11 @@
 - ✅ **Agent-4 深扫补收**（扫生成产物层，非 auto-memory）：D1 `references/task-decomposition`（《通用任务拆解指南》蒸馏，头号发现）+ D2 加密节补「预解密+COM 回污染」第二理由 + D3 `python3` stub 反射。故意不入：逐品类 loop 化路线（域内+已被沉淀分两轨覆盖）、CLAUDE.md 三层结构（已被 claude-md-three-layer-refactor skill 覆盖）。
 - ✅ **team 材料审核**：大部分=单次执行日志（留源 repo）或已被 agent-teams 覆盖；仅补「崩溃 team 残留 config→换 team-name」一行入 agent-teams。
 - ✅ **Mc-emoji 深扫补收**（思考6/思考1）：F1 `references/loops-and-automation`（CC 自动化/Loops 架构，含 F3 复用单位=skill 非 agent 并入）+ F2 orchestrator-route 加分层说明（薄 dispatcher=管线内执行器 vs 外层编排循环，止矛盾）。故意不入：F4 Reviewer 别造轮子（时效性强+自明，负 ROI）、/process-rd 域内细节。
+
+## 2026-06-18 收口轮（idle-零正文 实证 · 事件驱动非全量巡检）
+- ✅ **agent-teams idle-零正文单一权威收口**：新增「故障模型 + 兜底策略」节（模式①投递 flaky=实测 / 模式②session 截断=疑似推断+判据 / 已排除 tmux + 漏发工具两套错诊断）；Q8 瘦成指针、Mailbox 注改指权威节、旧"不需落盘"口径订正。源 = Wu Prj `mc-debug07`（已加头部回链）。
+- ✅ **mc-update-KB 补洞**（§3 step 8）：references 实证推翻处理范式（就地订正+下沉权威节）+ 单一权威收口"散点扫除 checklist"（rg 全揪逐处降指针）。mc-expert 陪审提出。
+- ⏸ 故意不入：team-task 体系重构（B 模式深度授权→SKILL.md 权威 / team-task.md 瘦身 / team-task-api 归档 `skills-archived/`）= 操作落地，已活在 skill + team-task.md 自身，KB 无需再记。
 
 ## 巡检台账（mc-update-KB 前置扫描基线）
 

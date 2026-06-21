@@ -1,0 +1,42 @@
+# autopilot_failcount.ps1 — /today 全托管「连续失败 2 次 → 转人工审」确定性计数器
+# 为什么存在:阈值计数不能靠 LLM 自己记(context 压缩会丢计数、"再试一次"会越过阈值)。
+# 确定性来自这个计数文件本身——它扛得住上下文压缩。LLM 只负责"认这次成/败",数到没数到 2 由本脚本说了算。
+# 计数文件放 C:\Temp(躲 Ldterm 监控盘,避免被透明加密)。
+param(
+  [ValidateSet('reset','fail','status')]
+  [string]$Mode = 'status',
+  [int]$Threshold = 2
+)
+
+$dir  = 'C:\Temp\today-autopilot'
+$file = Join-Path $dir 'failcount.txt'
+if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+function Get-Count {
+  if (Test-Path -LiteralPath $file) { [int]((Get-Content -LiteralPath $file -Raw).Trim()) } else { 0 }
+}
+
+switch ($Mode) {
+  'reset' {
+    Set-Content -LiteralPath $file -Value '0'
+    Write-Output "[autopilot] 连续失败计数已清零 (0/$Threshold)"
+    exit 0
+  }
+  'fail' {
+    $n = (Get-Count) + 1
+    Set-Content -LiteralPath $file -Value "$n"
+    if ($n -ge $Threshold) {
+      Write-Output "AUTOPILOT_STOP 🛑 已连续失败 $n 次(阈值 $Threshold)→ 立即停止本次执行,转人工审:把现状+卡点交用户,不得再试。"
+      exit 2
+    }
+    else {
+      Write-Output "[autopilot] ⚠️ 连续失败 $n/$Threshold(再失败 1 次即转人工审)"
+      exit 0
+    }
+  }
+  'status' {
+    $n = Get-Count
+    Write-Output "[autopilot] 当前连续失败 $n/$Threshold"
+    exit 0
+  }
+}

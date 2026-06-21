@@ -51,6 +51,7 @@ KB **默认不入**——多一份 = 多一份维护负担、拉低信噪比。�
 5. **`.gitignore` 边界自检**：新增是**内容层**(principles/decisions/reflexes/repo-map/references/MEMORY.md/CLAUDE.md/agents) → 该进 git；是 **inbox/工具/scratch**(auto-memory/commands/skills/todays-task) → 该忽略。新增类别若不在 .gitignore 覆盖内，提示用户补。
 6. **`CLAUDE.md` 同步检查**（保持薄！）：仅当新增**顶级结构** / **新边界规则** / **新导航入口**时才动 CLAUDE.md，且**只加指针,绝不复制内容**（违反就是它自己禁的"别散在 CLAUDE.md"）。
 7. 挪/删文件后 grep dangling 互链并修；凝固态档案（已封决策卡的主体）不回溯篡改，只改头部状态。
+8. **references 事实条目被实证推翻** → 就地订正 + 瘦成指针、正文下沉到新权威节（区别于 decisions/ 的"不回溯篡改"——references 本就随实证/版本更新，这是其设计用途，不算篡改）；且**收口单一权威前先 `rg '<旧口径关键词>'` 把同口径散点全揪**（同一旧结论常散在 注 / FAQ / 正文 多处），逐处降为"指向权威节的一句指针"，别只改一处、留 KB 内部自打架。〔2026-06-18 idle-零正文收口实战 + mc-expert 陪审〕
 
 ## 反例（KB 专属）
 

@@ -1,0 +1,42 @@
+---
+name: team-task
+description: 用 Agent Team 执行任务的入口（类似 /today）。读取当前 repo 根目录的 team-task.md，先让用户选驱动模式（A 人工驱动 / B 深度放权），再按其建一个三角色协调小队（planner / mc-expert / coder）、维护根目录 team-progress.md，然后执行 team-task.md 的「本次任务」。用户输入 /team-task 时触发。
+---
+
+# team-task
+
+把"启用 agent team 干一件事"固化成一个命令。等价于 `/today`，但目标文件是 `team-task.md`、且强制走 team 工作流。
+
+## 触发后立刻做
+
+1. **读当前 repo 根目录的 `team-task.md`**（`./team-task.md`）。读不到就停下报告"本 repo 根目录没有 team-task.md"，不要瞎建队。
+2. **先读完整份**——它定义了第 0 步驱动模式选择、团队结构、team-progress.md 规则、落点规范、边界。
+3. 看「本次任务」是否填了内容：
+   - **空** → 告诉用户"team-task.md 的『本次任务』是空的，请先填写"，不要自己编任务。
+   - **有** → 先归档上一轮 team-progress、再走第 0 步，然后建队执行。
+4. **归档上一轮 team-progress（建队前，按 team-task.md 通用要求执行）**：把根 `team-progress.md` 复制进 `team-progress/team-progress-{NNN}.md`（流水号取现有最大 +1，补零三位），再把根文件重置为带面包屑的最小骨架。根文件不存在/空骨架则跳过。（team-task.md 通用要求无此步的 repo 直接跳过。）
+5. **第 0 步（建队前强制）**：按 team-task.md，用 AskUserQuestion 让用户二选一驱动模式 **A 人工驱动 / B 深度放权**，选定前不许建队。
+
+## 建队执行（严格照 team-task.md 通用要求）
+
+- 前提：本 repo 已开 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`。若用自然语言建队后没 spawn 出 teammate，提示用户确认开关已开 + CC ≥ v2.1.32（`claude --version`）。
+- 用自然语言建一个 team：planner（只读规划）/ mc-expert（带 KB 挑战，只读顾问）/ coder（含 Edit/Write）。关键背景写进 spawn prompt（teammate 不继承 lead 对话历史）。
+- **放权深度**：A/B 的 repo 专属落地细节按 team-task.md 第 0 步执行；但 **B 模式两条跨 repo 恒定不变量写死在本 skill（见下「B 模式两条恒定不变量」节），不依赖各 repo team-task.md 是否写到**——这是「无弹窗」与「不被偷偷替你拍板」之间的安全阀，不能靠每个 repo 各自补。
+- **team-progress.md**：lead 当唯一写手，teammate 经 mailbox 汇报、lead 汇总落根目录 `team-progress.md`；只读角色不自己写文件。
+- **长正文回传（含只读角色）**：teammate 完成后**必须显式 `SendMessage` 把完整产出发给 lead**——**别依赖 idle 通知**，它只带一行摘要、不带正文。建队 spawn prompt 里要对每个 teammate 写明这条（尤其 planner / mc-expert：它们没 Write、不能落盘，但 `SendMessage` 对只读角色永远可用，显式发即可）。〔2026-06-17 实测：显式 `SendMessage` 单条 ~46KB 仍全量逐字到达；idle 通知零正文。**不是分块、不是落盘**——详见 KB agent-teams.md。〕
+- 收尾让 **lead** 跑 `Clean up the team`（先 shutdown 所有 teammate）。
+
+## 不要做
+
+- 不复述 team-task.md 全文，直接说"开始执行 X"后动手。
+- 不让 teammate 碰编排权 / 替用户做「推翻已封决策」级判断。
+- 不跳过第 0 步的 A/B 选择（选 A 时还需逐决策点等用户拍板；**选 B「深度放权」时：teammate 报低置信/无先例，lead 不转交用户，当场按「默认>成功率最高>最易回滚」自走 + 记进 team-progress 的「自主裁决(B)」区，仅 4 条红线上报——销毁性删除 / 对外交付·Ldterm 明文 / 连失 2 次 / 推翻已封决策；详见 team-task.md 第 0 步 + 驱动模式落地 + 下「B 模式两条恒定不变量」节**）。
+
+## B 模式（深度放权）两条恒定不变量
+
+这两条是 B 模式跨所有 repo 都成立的安全阀，**写死在本 skill**（不依赖各 repo team-task.md 是否写到），换执行者 / 换任务都不许漏：
+
+1. **自主裁决必须「浮」到交付物，不能只埋进 team-progress。** B 模式 lead 替用户拍的判断点（D1/D3 类、口径取舍、低置信选型……），除记进 team-progress 的「自主裁决(B)」区外，**必须在最终交付物汇报里显眼列为待确认项**，供用户验收时一句话能翻。team-progress 是内部文件、用户不看——只埋进去 = 偷偷替用户拍了板。这是「无弹窗」与「不被偷偷拍板」之间的安全阀，不能靠运气（同反射「交付必显式列 pending 项」）。
+2. **B 只压「循环内决策门」，不压「用户显式定义的交付/验收门」。** 两类门要分清：①循环内决策点（plan 审批、低置信选型）——B 压掉、自走；②用户显式定义的交付/验收门（如素材审核门、成品人工验收）——**B 不压，照常产出给用户**。换个门结构时，别因为选了 B 就把用户想要的门跳过、也别把用户的验收门误当循环决策吞掉。
+
+> 机制细节、为什么这样设计：见 KB `Mc-Expert-repo/references/agent-teams.md`「新手 FAQ」+ `Mc-emoji/[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`。
