@@ -27,7 +27,7 @@
 
 ## 其他（按需）
 - **xiaoduo-Excel task**：Excel 任务
-- **~/.claude/skills/**：14 全局 skill（office-com-helpers / inspect-*（ppt/excel/word）/ ppt-acceptance-check / excel-acceptance-check / ldterm-decrypt-images / pipeline-self-check-loop / com-survival-reflexes / read-selected-shape / team-task / claude-md-three-layer-refactor / **three-state-coloring-contract 已拆双子：`-word-only`（单通道 HighlightColorIndex）+ `-excel-only`（底纹+字色双通道，2026-06-04 落地）**…）
+- **~/.claude/skills/**：14 全局 skill（office-com-helpers / inspect-*（ppt/excel/word）/ ppt-acceptance-check / excel-acceptance-check / ldterm-decrypt-images / pipeline-self-check-loop / com-survival-reflexes / read-selected-shape / team-task / mc-scaffold-audit / **three-state-coloring-contract 已拆双子：`-word-only`（单通道 HighlightColorIndex）+ `-excel-only`（底纹+字色双通道，2026-06-04 落地）**…）
 
 ---
 

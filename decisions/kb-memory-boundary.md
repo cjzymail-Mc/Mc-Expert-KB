@@ -2,6 +2,8 @@
 
 **决策**：在 `Mc-Expert-repo`（中央 KB）内，memory 机制**两层分治**，与源 repo 的 auto-memory 定位**相反**——这个 repo 特殊，是"被策展的元记忆库"，不照搬源 repo 的"全量自动累积"。
 
+> ⚠️ **别拿本卡判源 repo 的 memory 分流**：本卡只管**中央 KB 这一个 repo**的两层分治（内容层 vs inbox，且与源 repo *反向*）。**源 repo（3rd-ppt / Agent-3·4 / Mc-emoji 等）的 `memory` ↔ `auto-memory` 怎么分是另一回事**——成文尺在 `.claude/commands/mc-update.md` **第 2 步**「没这条知识，新会话前 2-3 回复会出错吗？」：会 → `auto-memory`（高频反射，每会话加载）；不会 → `memory`（按需加载，技术细节/特定任务/档案）。〔2026-06-22：mc-expert + 主 Claude 因本卡是 KB 内唯一带 "memory" 字样的决策、被顺手抓来当源 repo 分流规则，同一根因连翻两轮，故立此指针。〕
+
 | 层 | 是什么 | 规则 |
 |---|---|---|
 | **KB 内容层** `principles` / `decisions` / `reflexes` / `repo-map` / `references` | 跨 repo 知识的**策展成品**（薄、稳定） | **只经入库判据闸门人工进入；绝不被 auto-memory 自动写入/merge** |
