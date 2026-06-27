@@ -93,7 +93,7 @@
 **Q4 · lead 没有 agent md，怎么控制它的行为/放权深度？**
 - lead 行为只有两个承载位（都是**软门**，靠遵守）：① **目标 repo 的 `CLAUDE.md`**（持久、每会话自动加载，写硬约定）；② **建队 prompt**（单次任务级）。
 - 真·**硬门**只有两处：**permission settings**（harness 层卡工具调用）+ 对 teammate 要求 **plan approval**（lead 批了才动手；可在 prompt 给审批标准，如"只批含测试覆盖的 plan"）。
-- 不放权：CLAUDE.md/prompt 写"每决策点停下问用户、coder 改动必须批 plan" + permission 不预批高风险；放权：写"lead 自主审批/派活，仅连失 2 次或高风险上报"。
+- 不放权：CLAUDE.md/prompt 写"每决策点停下问用户、coder 改动必须批 plan" + permission 不预批高风险；放权：写"lead 自主审批/派活，仅连失 2 次或高风险上报"（高风险/权限类命令走「后置人工门 + 落盘上报」、**非 B 自主流程中途的阻塞式权限框**，见 `decisions/autopilot-defer-perm-to-human-gate`）。
 
 **Q5 · teammate 能跑非 Claude 模型（智谱 GLM 等）吗？**
 - **不能**。①CC 的「3P providers」仅 **Bedrock/Vertex/Foundry**，且都是**托管 Claude** 的云，不是跑 GLM 的口子；②teammate 的 `model` 只认 Claude 档位（sonnet/opus/haiku 别名或 Claude 全 ID；feature request #34821 求自定义别名=现不支持）；③provider 是**会话/进程级**设置，in-process teammate 共享 lead 进程 → **整队同一 backend，无法一队混 Anthropic+智谱**。

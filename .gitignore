@@ -6,9 +6,9 @@
 .claude/auto-memory/
 
 # 通用 CC 工具/脚手架（非 KB 知识）
-# commands/ 默认忽略，但 mc-update-KB 是 KB 专属策展流程 = 知识，例外版本化
+# commands/ 默认忽略，但 KB-update 是 KB 专属策展流程 = 知识，例外版本化
 #.claude/commands/*
-#!.claude/commands/mc-update-KB.md
+#!.claude/commands/KB-update.md
 #/skills/                  # 只忽略「根级」skills/ 暂存区（锚定 repo 根）；.claude/skills/ 是要版本化的全局 skill 库，故不能用裸 skills/ 泛匹配
 
 # python 字节码缓存（非知识，机器生成）

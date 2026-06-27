@@ -14,6 +14,7 @@
 - [acceptance-guardrails](decisions/acceptance-guardrails.md) — 自动闭环三护栏（外部真相/重试硬上限/编排权留主 Claude）
 - [ppt-html-route](decisions/ppt-html-route.md) — COM 两角色：HTML 只杀视觉创作，加密 I/O 底座永久保留
 - [kb-memory-boundary](decisions/kb-memory-boundary.md) — KB 特殊：memory 两层分治（内容层只人工策展、auto-memory=待审 inbox、入库走判据闸门）+ CLAUDE.md 定位=薄操作手册非内容副本。⚠️含消歧指针：**源 repo 的 memory↔auto-memory 分流尺 ≠ 本卡**，那把尺在 mc-update 第 2 步
+- [autopilot-defer-perm-to-human-gate](decisions/autopilot-defer-perm-to-human-gate.md) — B 自主流程中途 rm/权限/敏感目录/对外命令一律后置人工门（halt=不执行+落盘+上报，**非阻塞式权限框**）；判据轴=「B 自主流程中途」非「无人值守」；源 2026-06-20 8h 死锁事故。已同步 `/free`·`/today`·team-task SKILL·agent-teams
 - [scaffold-placement-via-claudemd](decisions/scaffold-placement-via-claudemd.md) — 过程文件「落点规约」必须烧进每个 repo 的 CLAUDE.md（每冷会话唯一自动加载层；skill 按需救不了/auto-memory 错位/hooks 过度工程）；bootstrap 默认模板只固化「计划/产物/复盘三大类去向」普适内核，不抄 production 域内结构（防候选 B 翻版）。落地于 mc-scaffold-audit skill
 
 ## references/ — 事实手册
@@ -49,16 +50,30 @@
 - ✅ **mc-update-KB 补洞**（§3 step 8）：references 实证推翻处理范式（就地订正+下沉权威节）+ 单一权威收口"散点扫除 checklist"（rg 全揪逐处降指针）。mc-expert 陪审提出。
 - ⏸ 故意不入：team-task 体系重构（B 模式深度授权→SKILL.md 权威 / team-task.md 瘦身 / team-task-api 归档 `skills-archived/`）= 操作落地，已活在 skill + team-task.md 自身，KB 无需再记。
 
-## 巡检台账（mc-update-KB 前置扫描基线）
+## 2026-06-25 收割轮（B 模式权限后置 · 硬事故即时收割）
+- ✅ **新 decision `autopilot-defer-perm-to-human-gate`**：B 自主流程中途权限命令一律后置人工门（halt=不执行+落盘+上报、非阻塞框）。源 = Wu Prj `feedback_autopilot_defer_perm_command_to_human_gate`（2026-06-20 8h 死锁事故，**孤儿滞留 5 天**才收割）。
+- ✅ **跨入口同步**：`/free`（user-scope command，junction 全账号）+ `/today` 第 0 步（以其母版口径对齐）+ `team-task/SKILL.md` 红线#3 & 收尾 bullet + Mc-emoji CLAUDE.md 指针。mc-expert 陪审 GO-with-changes（4 项收紧已纳：行号订正 / 散点补 2 处 / 判据轴「B 自主流程中途」非「无人值守」/ 入库写「严重度豁免」非「频次≥3」）。
+- ✅ **散点收口**（mc-update-KB 第 8 步）：`references/agent-teams.md`「高风险上报」降指针 + `references/cc-permissions.md` 第 6 条反向互链（交互式 vs B 自主流程分工）。
+- ✅ **mc-update-KB 触发器补洞**：前置步加「③ 硬事故即时收割」——安全阀/事故类经验当场走①模式即时收割、别攒批（本决定孤儿滞留 5 天即此漏洞）。
+- 完整施工 plan：`Mc-emoji/plan-B模式权限命令后置人工门-同步修订.md`。
 
-> 用途：mc-update-KB「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
+## 2026-06-26 巡检轮（Wu Prj + Mc-emoji 双 repo 扫描）
+
+- ✅ **principles 入库判据补「普适 vs 项目专属测试」**：收割前问「换个不同性质项目还成立吗？依赖某 repo 特殊前提=项目专属、留原地」+「与已入库决策方向冲突的候选格外警惕（多是两者各有适用条件）」+否决留痕。源 = Wu Prj→Mc-emoji `feedback_kb_universal_vs_project_specific`；实例 fangcaixia 候选 B 已在 repo-map 孤儿审计，本轮把*通用判据*沉淀。append 不另起条目。
+- ⏸ **C1 延后（用户在开发中）**：StopFailure hook / API 错误恢复事实（observ-only、交互式 hook 不能自动续、headless 走 `--fallback-model`）。机制事实已稳定但周边方案未定型，用户要求开发完再纳入 → 已挂进巡检台账「待入候选」，下轮 `/KB-update` 收。源 = Mc-emoji `cc-stopfailure-hook-observ-only.md` + `API-Error-自动恢复-方案.md`（核于 2026-06-26, CLI v2.1.193）。
+- ⏸ 故意暂不入（borderline 未挑）：C3 廉价可测先实测（与 reflexes「先查再下结论」部分重叠）、C4 B 模式循环内选型走 mc-expert（部分被 keygate_mc_expert_jury 覆盖，新点「两份驱动规范冲突开工先声明」）、C5「指针委托真相源不回灌公共管线层」脱节（抽象偏早、实例属 deck 域）。
+- ❌ 不入：`feedback_destructive_delete_confirm`（已在 cc-permissions §6）/ `feedback_skill_vs_loop_orthogonal`（已在 loops-and-automation）/ `思考7 深度授权`（=autopilot 决策卡同一事故）/ `prefer-autonomy-fast-iteration`（已 operationalize）/ `feedback_reviewer_scope` / `feedback_agent_handoff_gate`（task-decomposition 覆盖）/ deck·工艺单域内细节。
+
+## 巡检台账（KB-update 前置扫描基线）
+
+> 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
 
 | 源 repo | 扫描截止(基线) | 上次巡检 | 本轮结论摘要 |
 |---|---|---|---|
 | `3rd-ppt-prj` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖（含孤儿审计）；过程文件≤05-29，无新增可入 |
 | `[Agent-3] Info Classifier` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖；过程文件≤06-02，无新增可入 |
-| `[Agent-4] Wu Prj` | 2026-06-15 | 2026-06-15 | 富矿。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / C1机器自检≠人工验收 / C2沉淀分两轨 / C3 solo-vs-team+陪审 / team残留config。已否：逐品类loop化路线、CLAUDE三层、派生层、复用核口径 |
-| `Mc-emoji` | 2026-06-15 | 2026-06-15 | 已入：loops-and-automation(含F3复用单位=skill) / orchestrator-route分层说明 / mc-expert路径订正+索引起手。已否：F4 Reviewer别造轮子 |
+| `[Agent-4] Wu Prj` | 2026-06-26 | 2026-06-26 | 富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
+| `Mc-emoji` | 2026-06-26 | 2026-06-26 | 已入：loops-and-automation(含F3) / orchestrator-route分层 / mc-expert路径订正 / **普适vs项目专属测试(06-26,源在此)**。⏸ **待入候选**：StopFailure/API错误恢复事实(`cc-stopfailure-hook-observ-only`+`API-Error-自动恢复-方案`)——用户开发中，开发完下轮收。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy(已operationalize) / Clash·WSL·Codex环境域内 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 
 ## Stage 1 状态

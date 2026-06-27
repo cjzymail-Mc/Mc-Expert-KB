@@ -43,6 +43,7 @@
 | 三重混合机制 = 任务路由器（非三层加权） | `Mc-debug-5-三重混合机制.md` | 2026-04 |
 | 多窗口/多 agent 工作流评估 | `Mc-emoji/[feature-03]/grok-01/02-...chat.md` | 2026-06-01 |
 | Agent Team 入门实测（机制澄清/落点/放权/智谱混合否决） | `Mc-emoji/[feature-03]/grok+claude-03-...chat.md` + `sub-plan-stage3-agentteam-spike.md`；事实沉淀于 `references/agent-teams.md`「新手 FAQ」 | 2026-06-02 |
+| B 自主流程中途权限命令后置人工门（8h 死锁事故 → `decisions/autopilot-defer-perm-to-human-gate`） | `[Agent-4] Wu Prj/.claude/auto-memory/feedback_autopilot_defer_perm_command_to_human_gate.md` + `Mc-emoji/plan-B模式权限命令后置人工门-同步修订.md` | 2026-06-20 |
 
 > 孤儿审计（step 6b，深读 6 个 ≥100KB 大档找未蒸馏决策）状态：**已执行 2026-06-01**。
 > 结果：绝大多数已蒸馏 / 属域内细节。收割孤儿 2 个：

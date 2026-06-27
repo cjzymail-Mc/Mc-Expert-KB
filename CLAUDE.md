@@ -22,7 +22,7 @@
 
 - **先讨论清楚再动**（Stage 0 起的节奏）：重判据 / 边界 / 入库前先对齐，别闷头写。
 - **先查再下结论**（[reflexes.md](reflexes.md)）：谈 CC flag/功能存不存在，先核实再说。
-- **固化走 `/mc-update-KB`**（不是通用 `/mc-update`）：本 repo 是策展稳定层，入库走三重判据闸门、auto-memory=待审 inbox。
+- **固化走 `/KB-update`**（不是通用 `/mc-update`）：本 repo 是策展稳定层，入库走三重判据闸门、auto-memory=待审 inbox。
 - 这是 **D 盘独立 repo、不绑账号**；进 git 可版本化/回滚——保留这两个属性，别引回 junction 依赖。
 
 > ⚠️ 本文件保持**薄**：只指针 + 边界 + 导航。任何 principles/reflexes/decisions 的内容**别复制进来**（会双份漂移，违 `reflexes` 的「别散在 CLAUDE.md」）。
