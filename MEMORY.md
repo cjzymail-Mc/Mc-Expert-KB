@@ -15,6 +15,7 @@
 - [ppt-html-route](decisions/ppt-html-route.md) — COM 两角色：HTML 只杀视觉创作，加密 I/O 底座永久保留
 - [kb-memory-boundary](decisions/kb-memory-boundary.md) — KB 特殊：memory 两层分治（内容层只人工策展、auto-memory=待审 inbox、入库走判据闸门）+ CLAUDE.md 定位=薄操作手册非内容副本。⚠️含消歧指针：**源 repo 的 memory↔auto-memory 分流尺 ≠ 本卡**，那把尺在 mc-update 第 2 步
 - [autopilot-defer-perm-to-human-gate](decisions/autopilot-defer-perm-to-human-gate.md) — B 自主流程中途 rm/权限/敏感目录/对外命令一律后置人工门（halt=不执行+落盘+上报，**非阻塞式权限框**）；判据轴=「B 自主流程中途」非「无人值守」；源 2026-06-20 8h 死锁事故。已同步 `/free`·`/today`·team-task SKILL·agent-teams
+- [self-compliance-probabilistic](decisions/self-compliance-probabilistic.md) — AI 规则 self-compliance=概率裁判，别为"提高激活率"建度量/监控；可靠性归冗余层两档（确定硬兜底 hook/人工门/熔断 + 概率软冗余 team/陪审，别混）；软自律扳机保留但不度量、不朝其爬山
 - [scaffold-placement-via-claudemd](decisions/scaffold-placement-via-claudemd.md) — 过程文件「落点规约」必须烧进每个 repo 的 CLAUDE.md（每冷会话唯一自动加载层；skill 按需救不了/auto-memory 错位/hooks 过度工程）；bootstrap 默认模板只固化「计划/产物/复盘三大类去向」普适内核，不抄 production 域内结构（防候选 B 翻版）。落地于 mc-scaffold-audit skill
 
 ## references/ — 事实手册
@@ -23,6 +24,7 @@
 - [acceptance-ladder](references/acceptance-ladder.md) — 批量产线验收 = 五级首件递进阶梯（映射→内容→渲染→项目级→批量抽检；首件挑最难样本）〔Agent-4，2026-06-12〕
 - [task-decomposition](references/task-decomposition.md) — 长链任务交底协议（信息三层 / 两段合同 plan 批准制 / 盘点先行+追问义务+拍板点封闭化 / 纠输入不纠输出）〔Agent-4，2026-06-10〕
 - [loops-and-automation](references/loops-and-automation.md) — CC 自动化/Loops 架构（loop↔skill 正交 / 复用单位是 skill 非 agent / 五件套 / 台账=程序计数器 / 续命≠触发 / 原生优先 orchestrator 最后手段 / 写操作不无人值守）〔Mc-emoji 思考6，2026-06-12〕
+- [cc-hooks-facts](references/cc-hooks-facts.md) — CC hook 机制事实（StopFailure=observ-only 交互式续不了/真续走 headless `--fallback-model` / UserPromptSubmit exit-2=全局变砖 landmine→launcher 防砖 / stdout 恒空 / settings 不热重载但脚本即时）〔核 2026-07-02, CLI v2.1.193, 易过期〕
 
 ## agents/ — KB 自带 subagent
 - [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 只读规划、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
@@ -64,6 +66,17 @@
 - ⏸ 故意暂不入（borderline 未挑）：C3 廉价可测先实测（与 reflexes「先查再下结论」部分重叠）、C4 B 模式循环内选型走 mc-expert（部分被 keygate_mc_expert_jury 覆盖，新点「两份驱动规范冲突开工先声明」）、C5「指针委托真相源不回灌公共管线层」脱节（抽象偏早、实例属 deck 域）。
 - ❌ 不入：`feedback_destructive_delete_confirm`（已在 cc-permissions §6）/ `feedback_skill_vs_loop_orthogonal`（已在 loops-and-automation）/ `思考7 深度授权`（=autopilot 决策卡同一事故）/ `prefer-autonomy-fast-iteration`（已 operationalize）/ `feedback_reviewer_scope` / `feedback_agent_handoff_gate`（task-decomposition 覆盖）/ deck·工艺单域内细节。
 
+## 2026-07-02 巡检轮（Mc-emoji feature-05 富矿 + 待入候选收割）
+
+- ✅ **收尾在途 decision `self-compliance-probabilistic`**（上轮已写卡+加索引、未提交）：本轮补收割叙事 + 台账。AI 规则 self-compliance=概率裁判，别为"提高激活率"建度量/监控；可靠性归冗余层两档（确定硬兜底 vs 概率软冗余，别混）。源 = feature-05 续19。
+- ✅ **新 reference `cc-hooks-facts`**：台账里那条明确「待入·用户开发中」的候选（StopFailure/API 错误恢复）现已开发完（hook 上线实战）→ 连同 UserPromptSubmit exit-2 变砖 landmine 合成一份 CC hook 机制事实。标核实日期/CLI 版本/易过期；实现细节留源 repo。
+- ✅ **reflexes 扩「先查再下结论」**：泛化到一切事实性断言 + 绑 4 个可见动作扳机（含"理论上应该/我记得"信号词即停）；新增**「阴性结论需阳性对照」**反射。源 = feature-05 `feedback_verify_before_asserting` + `feedback_negative_needs_positive_control`（dogfood 实证）。
+- ✅ **principles 推广「先备份 .bak」**：从 config 文件推广到任何会覆写持久产物的操作（miner/pipeline 重跑）+ 执行体标注的风险警示要采纳。源 = `feedback_backup_before_regenerate`。
+- ✅ **task-decomposition append「机械词触发先对齐」**：prompt 出现 扫描/读取/分析/盘点 → 先对齐再动手（盘点先行的机械化前哨）。源 = `feedback_scan_verb_align_first`。
+- ✅ **.gitignore 边界订正**（用户拍板）：`.claude/commands/` + `.claude/hooks/` = user-scope junction 母本，与 skills/agents 同等级 → 随 repo 版本化上 GitHub，不忽略。落地 4 个新文件（pin.md / stopfailure-autocontinue.ps1 / capture_launcher.py / BACKLOG-待修.md）。
+- ⏸ 不入（域内/项目状态，留源 repo）：`capture-wordlist-recall-blindspot`(feature-05 域) / `wuprj-loops-never-ran-for-real`(项目状态) / `mc-emoji-uses-both-3account-junctions`(junction 基建) / `chartjs-bake-overlay-route-validated`(deck 域，ppt-html-route 已覆盖) / `stopfailure-hook-fix`(实现细节，机制子集已并入 cc-hooks-facts) / `feedback_reserve_annotation_block`(交互偏好，窄+低频) / `l4-fuel-gate2-already-met` / `user-language-chinese-only`。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
@@ -73,7 +86,7 @@
 | `3rd-ppt-prj` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖（含孤儿审计）；过程文件≤05-29，无新增可入 |
 | `[Agent-3] Info Classifier` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖；过程文件≤06-02，无新增可入 |
 | `[Agent-4] Wu Prj` | 2026-06-26 | 2026-06-26 | 富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
-| `Mc-emoji` | 2026-06-26 | 2026-06-26 | 已入：loops-and-automation(含F3) / orchestrator-route分层 / mc-expert路径订正 / **普适vs项目专属测试(06-26,源在此)**。⏸ **待入候选**：StopFailure/API错误恢复事实(`cc-stopfailure-hook-observ-only`+`API-Error-自动恢复-方案`)——用户开发中，开发完下轮收。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy(已operationalize) / Clash·WSL·Codex环境域内 |
+| `Mc-emoji` | 2026-07-02 | 2026-07-02 | **07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 
 ## Stage 1 状态
