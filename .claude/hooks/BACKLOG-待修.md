@@ -47,3 +47,22 @@
   - 失败日志改 `skip(借焦点重试1次后仍未命中·已还原·留闪烁待人工)`。四道安全门其余逻辑未动；`ParseFile` 语法校验 + `Add-Type` C# 编译 PASS。
 - **状态**：✅ 已修 · 2026-06-30。改 `~/.claude/hooks/stopfailure-autocontinue.ps1`（junction → `Mc-Expert-repo/.claude/hooks/`，一次改 `.claude-mc`/`.claude-xh` 两账号生效；`.claude-glm` 不注册）+ 同步 Mc-emoji skill 夹副本。settings 命令行未变、脚本每次 fire 重读 → **即时生效不用重启**。
 - **遗留**：沿用 #1 的「SENT 假成功」局限不变（v3.1 没动校验逻辑）。另：「最终失败后一直闪到用户点窗口」是默认取舍，若嫌烦可改 `FLASHW_ALL` 定次数自动停。
+
+---
+
+## #3 · stopfailure-autocontinue.ps1 — slash-command 开局的无人值守会话无 aiTitle → 认窗门永久 skip，救不回 🔴未修
+
+- **登记日期**：2026-07-03（用户指示：先查明记录、暂不改代码）
+- **现象**：/today 全托管会话（session=76f35441，cfg=.claude-mc，cwd=Mc-emoji）跑批途中黄字真中断（`API Error: Connection closed mid-response`），hook **FIRED 了**但 `action=skip(transcript无aiTitle·暂无法认窗)`——continue 没敲、**也没有任何闪烁提醒**（skip 发生在借焦点/闪烁逻辑之前，用户零感知）。用户完全离席，会话干等 9 分钟（Churned for 9m 0s）直到人回来手动interrupt。同日上午 10:27/10:36/10:44 另有 3 次同款 skip（其中 10:36/10:44 两次 `cfg=` 空、transcript 不在常规项目路径，疑为 headless/schtasks 探针会话——无窗可敲，skip 反而正确；10:27 那次待考）。
+- **根因**：CC 的 ai-title 生成器**只在用户发自然语言消息后才产标题**。本会话开局是 `/today`（command-message）→ AskUserQuestion 选项应答（tool result）→ 之后全程自主跑批，**无一条自然语言 prompt** → transcript 里 0 行 aiTitle、窗口标题一直是默认「Claude Code」。hook 第④道认窗门**唯一依赖 aiTitle**（v2 起废弃了旧的默认题匹配）→ 读空 → 按安全设计放弃。
+  **结构性盲区：slash-command 开局 + 无人值守（/today 全托管、将来乙-2 定时 /reflect）= 最需要自动续的会话类型，恰好整类落在认窗门外。**
+- **证据**（复核路径）：
+  - `%USERPROFILE%\claude-stopfailure-probe.log`：`2026-07-03 14:47:46 FIRED session=76f35441 action=skip(transcript无aiTitle·暂无法认窗) aiTitle=''`。
+  - 事发截图：窗口标题「※ Claude Code」（默认题非对话摘要），与「渲染器从未设过 aiTitle」互证。
+  - transcript 复核（邻行时间戳定位，非猜测）：aiTitle 行（`type=ai-title`）共 4 行，行号 133/154/164/179，**全部位于 07:03:22Z（=本地 15:03）之后**——即用户回来发第一条自然语言之后才生成；14:47:46 fire 时刻 0 行。hook 读空 = 忠实读取，**排除解析 bug**。
+  - 生成时点旁证：aiTitle 内容 =「调查hook没有生效的原因」= 恰是用户事后那条消息的主题。
+- **修法（建议，未实施；下次升级 hook 时一并处理）**：
+  - 首选：认窗门加 fallback——aiTitle 为空时，若「标准化标题 == 'Claude Code'（默认题）」的可见窗口**恰好唯一**，视为本会话窗口，照常走借还+敲键；0 个或 ≥2 个照旧 skip（**保持「唯一命中才动手」安全边界**，多开撞默认题时安全放弃）。单会话无人值守（最常见场景）即被覆盖。日志标 `·默认题fallback` 以便区分。
+  - 不建议走 PID 链认窗：ConPTY/WindowsTerminal 宿主进程链断裂，`GetConsoleWindow` 返 0 已在 v1 实证。
+- **附带发现**：transcript 里 aiTitle 值自带 mojibake 尾巴（截断 UTF-8 → lone surrogate，「原�」）。hook 认窗用 `-eq` 精确比对，若渲染器设窗口标题时对同一串做了不同截断/清洗，可能出现「有 aiTitle 也对不上」的次生失配——修 #3 时顺手核一眼（现 Normalize-Title 只去前缀符号，没处理坏字符）。
+- **状态**：🔴 未修 · 仅登记（2026-07-03）。
