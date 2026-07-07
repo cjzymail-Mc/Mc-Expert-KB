@@ -44,5 +44,6 @@ Boris 敢全自动无监督靠 CI + code-review 安全网 + 团队 PR 洪流。�
 - **含写操作的 loop 不无人值守**（包进脚本的 `Remove-Item` 静默执行、误碰密文 Office 二进制）；只读/幂等 loop（inspect 盘点 / 核验产物明文 magic / 扫 settings 完整性）才安全。
 - **不为用 loop 开 bypassPermissions**（违方案 A；ask 门拦不住包进脚本的删除）。
 - 成熟度门：只跑通 1 次的流程别 loop 化（判断逻辑还没稳到能写死=放大错误，呼应 [[../decisions/kb-memory-boundary]] 沉淀分两轨）。
+- **Pro 订阅 OAuth 账号技术上跑不了无人值守定时**（硬约束轴，区别于上面"不该无人值守"的规范轴）：Task Scheduler/schtasks 派生 `claude -p` 用个人 Pro 订阅 token（`subscriptionType:pro`）→ `400 This organization has been disabled`；**同账号同模型交互式派生 ✅、定时派生 ❌**，唯一差别 = 被识别成自动化服务。真无人值守定时**必须用 API Key 账号**（`ANTHROPIC_API_KEY`，为自动化设计、不撞组织禁用）。**⚠️ 易过期**：属 Anthropic 账号策略，可能随政策变，用前复核。〔Mc-emoji feature-05 乙-2a，2026-07-03 实测；另 3 层 stdin 挂死 / MSYS 路径改写 / 代理不继承 = 环境调试细节留源 repo〕
 
 **原档指针**：`Mc-emoji/[feature-03-take-a-nap]/Mc未来思考6：Boris-loops机制.md`（全文含 /process-rd 命令实现、claude -p headless 机制、5 件套逐条对照）；思考1（agent≠skill 共性矩阵）。相关：[[agent-teams]]、[[task-decomposition]]、[[../decisions/orchestrator-route]]。

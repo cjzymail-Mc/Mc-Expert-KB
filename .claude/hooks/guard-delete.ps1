@@ -1,19 +1,120 @@
-# guard-delete.ps1 — PreToolUse 安全网（L2：AST 结构化识别 + 正则兜底）
-# 作用：扫描 Bash/PowerShell 工具调用的命令串，识别"真正的删除动作"就强制弹确认（ask）。
+# guard-delete.ps1 — PreToolUse 安全网（L3：AST 结构化识别 + 包装类删除/破坏性 git + 临时目录放行 + 正则兜底）
+# 作用：扫描 Bash/PowerShell 工具调用的命令串，识别"真正的删除/破坏动作"就强制弹确认（ask）。
 # 为什么需要：方案 A 的 settings `ask` 规则是「命令开头前缀匹配」，把 Remove-Item/rm
 #   包进 foreach/脚本/管道（开头变成 $f= 之类）就会绕过 → 静默删除。
 #
-# L2 与旧 L1 的区别（2026-06-09）：
-#   L1 旧版直接对【命令全文】跑 substring 正则 \brd\b 等 → 把 `find -name "*RD*"`
-#      这种【字符串字面量里的 RD】误判成删除命令（PS -match 默认大小写不敏感，RD 也中）。
-#   L2 改为先用 PowerShell 语法分析器把命令解析成 AST，只在【命令位置】(CommandAst 的
-#      命令名 / [IO.File]::Delete 这类成员调用) 上找删除动词；字符串字面量 "*RD*" 在 AST
-#      里是 StringConstant，不是命令名，自然被忽略 → 消除该类误报。
-#      仍能抓住包进 foreach { Remove-Item } 的删除（那个 Remove-Item 是真命令名）。
-#   兜底：若命令解析报错（怪 bash 语法 PS 啃不动），回退到旧的全文正则——保护永不掉线，
-#      只在那一刻退回粗粒度。
+# L2→L3 升级（2026-07-03，见 plan-权限守卫升级-2026-07-03.md）：在 L2「AST 只看命令名」基础上补四块——
+#   a. 包装命令参数扫描：find/xargs/cmd/sh/bash/pwsh/python… 命中时对参数串跑删除正则（堵内嵌删除）。
+#   b. 破坏性 git：git reset --hard / clean -f / checkout -- / restore / push --force / filter-branch → ask。
+#   c. 临时目录字面路径自动放行：删除动词命中后走四重闸门（纯字面量/绝对路径+白名单根/规范化再比对/reparse 检查），
+#      全过才放行，任一拿不准 → 照常 ask（误判只朝"多弹"掉）。减打扰项、自研 fail-safe。
+#   d. 回退正则同步：AST 解析失败时的全文兜底补上 find -delete / rmtree / xargs rm / 破坏性 git。
+#
+# L3.1 升级（2026-07-04，修 hooks BACKLOG #4）：AST 解析失败（多为 bash 特有语法 for/do/heredoc）时
+#   不再对整条原始字符串裸跑删除正则——改「剥引号字面量 + 按分隔符切段 + 只判命令位置 token」的轻量分词，
+#   消掉 grep 搜索词 / echo 标签 / --note 文本里字面 rm 的误弹；命令位置命中包装命令（bash/sh/xargs…）时
+#   连引号内容一起按 wrapperPatterns 扫，保住 `bash -c "rm x"` 类内嵌真删除。分词自身抛错 → 回落旧全文裸正则。
+#
+# L2 与旧 L1 的区别（2026-06-09）：L1 对命令全文跑 substring 正则，把 `find -name "*RD*"` 里的
+#   字符串字面量 RD 误判成删除；L2 先解析 AST，只在命令位置找删除动词，消除该类误报，仍抓 foreach { Remove-Item }。
 # 边界：防「误包」不防「故意混淆」（base64/别名/变量间接 `& $var` 仍可绕）。
-#   fail-open：脚本自身出错绝不阻断会话。
+#   fail-open：脚本自身出错绝不阻断会话（exit 0）。
+
+# ---- 白名单根（改动 1c）：只有绝对路径落在这些根之下的字面量删除才自动放行 ----
+$script:WhitelistRoots = @(
+  'C:\Users\xy198\AppData\Local\Temp\claude\'
+)
+if ($env:TEMP) {
+  $t = $env:TEMP
+  if (-not $t.EndsWith('\')) { $t += '\' }
+  $script:WhitelistRoots += $t
+}
+
+# 单条字面路径是否落在白名单内（绝对 + 规范化 + 前缀 + reparse 检查全过才 true；任一拿不准 false=弹）
+function Test-PathWhitelisted {
+  param([string]$Raw)
+  if ([string]::IsNullOrWhiteSpace($Raw)) { return $false }
+  try {
+    # 闸门2：必须完全限定的绝对路径（相对路径 / `/c/...` bash 风格一律 false）
+    if (-not [System.IO.Path]::IsPathFullyQualified($Raw)) { return $false }
+    # 闸门3：规范化还原 `..` 穿越后再比对
+    $full = [System.IO.Path]::GetFullPath($Raw)
+  } catch { return $false }
+
+  $matchedRoot = $null
+  foreach ($root in $script:WhitelistRoots) {
+    if ($full.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { $matchedRoot = $root; break }
+  }
+  if (-not $matchedRoot) { return $false }
+
+  # 闸门4：目标路径链上（root 及以下）存在 reparse point（junction/符号链接）→ false，
+  #   堵"临时目录里埋 junction 指向真实目录再递归删"。
+  try {
+    $check = $full
+    while ($check -and $check.Length -ge $matchedRoot.Length) {
+      if (Test-Path -LiteralPath $check) {
+        $item = Get-Item -LiteralPath $check -Force -ErrorAction Stop
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+      }
+      $parent = [System.IO.Path]::GetDirectoryName($check)
+      if (-not $parent -or $parent -eq $check) { break }
+      $check = $parent
+    }
+  } catch { return $false }
+
+  return $true
+}
+
+# 某个删除动词 CommandAst 是否可白名单放行（闸门1：所有非 flag 参数均为纯字面量，且每条都在白名单内）
+function Test-DeleteCommandWhitelisted {
+  param($CmdAst)
+  $paths = @()
+  $elements = $CmdAst.CommandElements
+  for ($i = 1; $i -lt $elements.Count; $i++) {
+    $el = $elements[$i]
+    if ($el -is [System.Management.Automation.Language.CommandParameterAst]) { continue }  # flag（-Recurse/-Path…）
+    if ($el -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+      $paths += $el.Value
+    } else {
+      return $false  # 变量/可扩展串/数组/子表达式 → 静态分析不知运行时指向 → 弹
+    }
+  }
+  if ($paths.Count -eq 0) { return $false }  # 没有可判定的字面路径 → 弹
+  foreach ($p in $paths) {
+    if (-not (Test-PathWhitelisted $p)) { return $false }
+  }
+  return $true
+}
+
+# 剥引号字面量（L3.1）：把 '...' 与 "..."（含 \" 转义）的内容替换为单个空格，
+#   供 AST 失败兜底分词只看引号外文本——grep 搜索词 / --note 文本 / 带引号标签即被摘除。
+#   未闭合引号：吞到串尾（宁可少看，后续包装命令扫描仍看原文，不失守）。
+function Get-StrippedCommand {
+  param([string]$s)
+  $sb = [System.Text.StringBuilder]::new()
+  $i = 0
+  while ($i -lt $s.Length) {
+    $ch = $s[$i]
+    if ($ch -eq "'") {
+      $i++
+      while ($i -lt $s.Length -and $s[$i] -ne "'") { $i++ }
+      $i++
+      [void]$sb.Append(' ')
+    }
+    elseif ($ch -eq '"') {
+      $i++
+      while ($i -lt $s.Length -and $s[$i] -ne '"') {
+        if ($s[$i] -eq '\' -and ($i + 1) -lt $s.Length) { $i++ }
+        $i++
+      }
+      $i++
+      [void]$sb.Append(' ')
+    }
+    else { [void]$sb.Append($ch); $i++ }
+  }
+  return $sb.ToString()
+}
+
 try {
   $raw = [Console]::In.ReadToEnd()
   if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
@@ -21,38 +122,147 @@ try {
   $cmd = [string]$data.tool_input.command
   if ([string]::IsNullOrWhiteSpace($cmd)) { exit 0 }
 
-  # 删除动词（命令名层面，大小写不敏感比较——PowerShell 命令名本就大小写不敏感）
+  # 删除动词（命令名层面，-contains 对字符串大小写不敏感）
   $deleteVerbs = @('Remove-Item', 'rm', 'rmdir', 'rd', 'del', 'erase', 'ri')
 
-  # 全文正则兜底用（仅在 AST 解析失败时启用）
+  # 内嵌解释器/脚本语言共用的删除模式（改动 1a）
+  $langPatterns = @('rmtree', 'os\.remove', 'os\.unlink', '\.unlink\(', 'rmSync', 'unlinkSync', 'FileUtils\.rm')
+  $wrapperPatterns = @{
+    'find'       = @('-delete', '-exec\s+rm')
+    'xargs'      = @('\brm\b', '\brmdir\b', 'Remove-Item')
+    'cmd'        = @('\bdel\b', '\brd\b', '\berase\b', '\brmdir\b')
+    'sh'         = @('\brm\b', 'Remove-Item', '\brmdir\b', '\bdel\b')
+    'bash'       = @('\brm\b', 'Remove-Item', '\brmdir\b', '\bdel\b')
+    'pwsh'       = @('\brm\b', 'Remove-Item', '\brmdir\b', '\bdel\b')
+    'powershell' = @('\brm\b', 'Remove-Item', '\brmdir\b', '\bdel\b')
+    'python'     = $langPatterns
+    'python3'    = $langPatterns
+    'py'         = $langPatterns
+    'node'       = $langPatterns
+    'perl'       = $langPatterns
+    'ruby'       = $langPatterns
+  }
+
+  # 破坏性 git（改动 1b；restore 特判排除 --staged）
+  $gitPatterns = @(
+    '\breset\b.*--hard',
+    '\bclean\b.*-[a-zA-Z]*f',
+    '\bcheckout\b\s+--(\s|$)',
+    '\bpush\b.*(--force\b|--force-with-lease|-f\b)',
+    '\bfilter-branch\b'
+  )
+
+  # 全文正则兜底（仅 AST 解析失败时启用，改动 1d 已同步补充）
   $fallbackPatterns = @(
     'Remove-Item', '\brm\b', '\brmdir\b', '\bdel\b', '\brd\b',
-    '\[IO\.File\]::Delete', '\[System\.IO\.(File|Directory)\]::Delete'
+    '\[IO\.File\]::Delete', '\[System\.IO\.(File|Directory)\]::Delete',
+    'find .*-delete', 'rmtree', 'xargs .*\brm\b',
+    'git +(reset +--hard|clean +-\w*f|push +.*--force)'
   )
 
   $hitReason = $null
 
-  # ---- L2：AST 结构化识别 ----
+  # ---- L3：AST 结构化识别 ----
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseInput($cmd, [ref]$tokens, [ref]$errors)
 
   if ($errors -and $errors.Count -gt 0) {
-    # 解析失败 → 回退全文正则（保护不掉线）
-    foreach ($p in $fallbackPatterns) {
-      if ($cmd -match $p) { $hitReason = "命令含删除动作(AST 解析失败，全文正则兜底匹配 /$p/)，强制确认。"; break }
+    # 解析失败（多为 bash 特有语法）→ L3.1 轻量分词兜底：剥引号 + 切段 + 只判命令位置 token。
+    # 判据向结构化主路径对齐；分词自身抛错 → catch 回落旧全文裸正则（误判只朝"多弹"掉）。
+    try {
+      $stripped = Get-StrippedCommand $cmd
+      $skipWords = @('do', 'then', 'else', 'elif', 'if', 'while', 'until', 'for', 'time', 'sudo', 'command', 'exec', 'builtin', 'nohup', '!')
+      foreach ($seg in ($stripped -split '[;&|(){}`]|\r?\n')) {
+        # 命令位置 token：跳过控制关键字 / VAR=x 赋值前缀 / 切段产生的游离 flag
+        $cmdTok = $null
+        foreach ($t in ($seg.Trim() -split '\s+')) {
+          if (-not $t) { continue }
+          if ($skipWords -contains $t.ToLowerInvariant()) { continue }
+          if ($t -match '^[A-Za-z_][A-Za-z0-9_]*=') { continue }
+          if ($t.StartsWith('-')) { continue }
+          $cmdTok = $t; break
+        }
+        if (-not $cmdTok) { continue }
+        $leaf = ($cmdTok -split '[\\/]')[-1] -replace '\.exe$', ''
+        $lname = $leaf.ToLowerInvariant()
+
+        # 1) 命令位置是删除动词 → ask（不走白名单放行：bash 语法段无 AST，静态判不了路径字面量）
+        if ($deleteVerbs -contains $lname) {
+          $hitReason = "命令含删除动作(AST 解析失败，分词兜底：命令位置 '$cmdTok')，强制确认。"
+          break
+        }
+        # 2) 命令位置是包装命令 → 连引号内容一起对全文扫（堵 bash -c "rm x" 类内嵌删除；
+        #    包装命令在场时宁可多弹，不因剥引号漏拦）
+        if ($wrapperPatterns.ContainsKey($lname)) {
+          foreach ($p in $wrapperPatterns[$lname]) {
+            if ($cmd -match $p) { $hitReason = "命令含包装类删除(AST 解析失败，分词兜底：$lname 全文匹配 /$p/)，强制确认。"; break }
+          }
+          if ($hitReason) { break }
+        }
+        # 3) 破坏性 git（对剥引号后的本段扫）
+        if ($lname -eq 'git') {
+          foreach ($p in $gitPatterns) {
+            if ($seg -match $p) { $hitReason = "命令含破坏性 git(AST 解析失败，分词兜底匹配 /$p/)，强制确认。"; break }
+          }
+          if ($hitReason) { break }
+        }
+      }
+      # 4) 引号外的 .NET 删除调用 / rmtree / find -delete 直书（不占命令位置也要抓）
+      if (-not $hitReason) {
+        foreach ($p in @('\[IO\.File\]::Delete', '\[System\.IO\.(File|Directory)\]::Delete', '\brmtree\b', 'find .*-delete')) {
+          if ($stripped -match $p) { $hitReason = "命令含删除/破坏动作(AST 解析失败，剥引号后匹配 /$p/)，强制确认。"; break }
+        }
+      }
+    } catch {
+      # 分词兜底自身出错 → 回退全文正则（保护不掉线）
+      foreach ($p in $fallbackPatterns) {
+        if ($cmd -match $p) { $hitReason = "命令含删除/破坏动作(AST 解析失败，全文正则兜底匹配 /$p/)，强制确认。"; break }
+      }
     }
   }
   else {
-    # 1) 命令位置：CommandAst 的命令名命中删除动词
     $cmdAsts = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true)
     foreach ($c in $cmdAsts) {
       $name = $c.GetCommandName()
-      if ($name -and ($deleteVerbs -contains $name)) {
+      if (-not $name) { continue }
+      $leaf = [System.IO.Path]::GetFileName($name)
+      if ($leaf) { $leaf = $leaf -replace '\.exe$', '' }
+      $lname = if ($leaf) { $leaf.ToLowerInvariant() } else { $name.ToLowerInvariant() }
+
+      # 参数串（命令名之后全部，供正则扫描）
+      $argText = ''
+      if ($c.CommandElements.Count -gt 1) {
+        $argText = ($c.CommandElements[1..($c.CommandElements.Count - 1)] | ForEach-Object { $_.Extent.Text }) -join ' '
+      }
+
+      # 1) 直接删除动词 → 先试白名单放行，未过才 ask
+      if ($deleteVerbs -contains $lname) {
+        if (Test-DeleteCommandWhitelisted $c) { continue }
         $hitReason = "命令含删除动作(命令名 '$name')，强制确认——包进脚本/循环/管道的删除也会被抓到。"
         break
       }
+
+      # 2) 包装命令参数扫描（内嵌删除）
+      if ($wrapperPatterns.ContainsKey($lname)) {
+        foreach ($p in $wrapperPatterns[$lname]) {
+          if ($argText -match $p) { $hitReason = "命令含包装类删除($lname 参数匹配 /$p/)，强制确认。"; break }
+        }
+        if ($hitReason) { break }
+      }
+
+      # 3) 破坏性 git
+      if ($lname -eq 'git') {
+        foreach ($p in $gitPatterns) {
+          if ($argText -match $p) { $hitReason = "命令含破坏性 git(参数匹配 /$p/)，强制确认。"; break }
+        }
+        if (-not $hitReason -and ($argText -match '\brestore\b') -and ($argText -notmatch '--staged')) {
+          $hitReason = "命令含破坏性 git(git restore 无 --staged 会丢工作区改动)，强制确认。"
+        }
+        if ($hitReason) { break }
+      }
     }
-    # 2) 成员调用：[IO.File]::Delete / [System.IO.Directory]::Delete(...)
+
+    # 4) 成员调用：[IO.File]::Delete / [System.IO.Directory]::Delete(...)
     if (-not $hitReason) {
       $memberAsts = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true)
       foreach ($m in $memberAsts) {

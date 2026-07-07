@@ -77,7 +77,7 @@ description: 扫描整个 repo 是否符合「项目脚手架规范」，输出�
 | 检查项 | 触发信号 | production | learning | 整改动作 |
 |---|---|---|---|---|
 | `mc-plan/`（main-plan + sub-plan-NN-*.md） | 有多步/多 feature 规划需求 | ✅ | ⬜ | **硬规约：只放 plan md，脚本/台账/备份禁入** |
-| `mc-progress/` | 有脚本+产物需组织 | ✅ | ⬜ | 形态=`scripts/{probe,ledger,classify,report,...}/ 领域动词子目录+各 README`（function 轴）；产物按 topic 轴；备份按 time 轴。learning repo 用 `[feature-XX]/{tools,output}` 即可 |
+| `mc-progress/` | 有脚本+产物需组织 | ✅ | ⬜ | 形态=`scripts/{probe,ledger,classify,report,...}/ 领域动词子目录+各 README`（function 轴）；产物按 topic 轴；备份按 time 轴。learning repo 用 `[feature-XX]/{tools,output}` 即可。**★复用意图维度（正交于功能轴）**：`scripts/` 下 **repo 私有散件躺扁平 `scripts/{功能}/`**（好复用、不炸夹）；**skill 候选簇（互相 import／抽了公共模块／总一起跑）收进自足子夹 `scripts/<簇名>/`**（自带公共模块+README，子夹住 scripts/ 底下不新建顶级夹→不炸夹）。**解耦硬规矩：簇只 import 自己子夹内、禁伸出去引兄弟功能轴脚本／禁硬编码项目私料路径**——守住则将来整夹拎出即成 skill（见 §B.3）。毕业信号见 §B.3 |
 | `mc-debug/`（mc-debugNN-*.md 架构讨论/复盘） | 有设计决策/复盘 | 🔶 | ⬜ | — |
 | 全局**权威档/真相源**（台账.xlsx 或品类总档） | 有多产物/多口径需统一 | ✅ | ⬜ | 多产物项目须有唯一事实源 |
 | **`spec-gate-*.md`（开工门禁/规格签字冻结）** | 有批量改造/放量前需冻结规格 | ✅ | ⬜ | 探测→拟规格→**用户签字冻结为基线**→才放量；对齐 `references/task-decomposition.md`「两段合同 plan 批准制」。配 `批量改造开工门禁` 类 skill |
@@ -141,6 +141,7 @@ description: 扫描整个 repo 是否符合「项目脚手架规范」，输出�
 | mc-debug/ | 架构讨论 / 计划制定 / 复盘类 md | 执行产物、计划 md |
 | .claude/ | 命令、agent、memory（harness 管） | 工作产物 |
 > 新增/重命名顶级文件夹须同步更新本表。
+<!-- 脚本若成簇要析出 skill → 收进 scripts/<簇名>/ 自足子夹、守解耦规矩（只 import 子夹内），见 §B.3 -->
 <!-- 🔶 按需（出现信号再加，别预建）：
      - STATE.md：出现带日期演进史/变更日志时分层
      - team-task.md + team-progress.md + team-progress/：用 Agent Teams 时建 -->
@@ -164,6 +165,7 @@ description: 扫描整个 repo 是否符合「项目脚手架规范」，输出�
 | mc-debug/（或根级 *-讨论.md） | 跨 feature 的架构讨论 / 复盘 md |
 | .claude/ | 命令、agent、memory |
 > 目标文件夹不存在时先创建再放。
+<!-- tools/ 里脚本若成簇要析出 skill → 收进 tools/<簇名>/ 自足子夹、守解耦规矩，见 §B.3 -->
 <!-- 🔶 按需（别预建）：mc-plan/、mc-progress/——当出现多步规划/大量脚本产物需统一组织时再建 -->
 ```
 
@@ -192,9 +194,10 @@ description: 扫描整个 repo 是否符合「项目脚手架规范」，输出�
 > 模板**只固化普适内核**；把某个成熟 production repo（如 Wu Prj）的局部最优硬抽成所有新 repo 普适 ＝ KB `repo-map.md`「候选 B 被否」教训的翻版。用 principles 三连问逐行筛，切三档：
 
 - ✅ **进默认模板**（真普适内核）：`mc-plan/`（计划 md）、`mc-progress/`（或 learning 的 `[feature-XX]/`）（执行产物）、`mc-debug/`（架构讨论/复盘）、`.claude/` + 硬底线句「目标文件夹不存在先创建再放；新增/重命名顶级文件夹须同步更新本表」。
+- ✅ **进普适内核（2026-07-04 新升 · 陪审 v2 过）· 复用意图维度 + 解耦硬规矩**：`scripts/`（或 `tools/`）下 **repo 私有散件躺扁平 `{功能}/` vs skill 候选簇收进自足子夹 `<簇名>/`**；**簇只 import 自己子夹内、禁伸出去引兄弟功能轴脚本/禁硬编码私料路径**。〔**豁免下方「第二个 production repo 验证后才升普适」样本门槛**：这两条是「能否析出成 skill」的**通用软件工程切面、不含任何 repo 业务语义**，那道门是给"业务结构分法"设的、非通用原则。〕**但落地形态：bootstrap 模板只放一行注释指针、整条规矩落 audit 侧**（§3/L2 整改动作 + §5 指针），不烧进每个新 repo 冷启动 CLAUDE.md（防过早抽象/CLAUDE.md 变厚）。
 - 🔶 **模板留注释占位、不写内容**：`STATE.md`（出现带日期演进史再分层，指向 §4）、team-task 三件套（用 Agent Teams 才建）——写成被注释的「按需」行、不预填。
-- ❌ **不进模板**（域内专属，留原 repo，v2 有第二个 production repo 验证后再说）：scripts 6 子目录（probe/ledger/classify/...）、台账 xlsx 三轴、templates/、spec-gate-*、Loops/。
-- **判别口诀**：**「过程文件三大类（计划/产物/复盘）的去向」是普适的；「产物内部怎么再分（几个 scripts 子目录、台账什么轴）」是域内的。模板只固化前者。**
+- ❌ **不进模板**（域内专属，留原 repo，v2 有第二个 production repo 验证后再说）：scripts **具体分几个业务子目录**（probe/ledger/classify/... 的业务分法）、台账 xlsx 三轴、templates/、spec-gate-*、Loops/。〔注意区分：「按什么业务再分子目录」仍域内；但「散件扁平 vs 可析出簇进自足子夹」的**落点分法**已升普适（见上条）。〕
+- **判别口诀**：**「过程文件三大类（计划/产物/复盘）的去向」+「散件 vs 可析出簇的落点分法」是普适的；「产物内部按业务再分几个 scripts 子目录 / 台账什么轴」是域内的。模板只固化前者（且复用意图/解耦规矩落 audit 侧、模板只留注释指针）。**
 
 ---
 
@@ -313,7 +316,7 @@ repo 类型判定：learning（信号：CLAUDE.md 自称实验 repo + [feature-X
 🔶 [P1] 根 CLAUDE.md ~50 行混入多条带日期教训
         → 触发 L1 三层拆分判据；建议拆出 STATE.md 承接演进史，动作见 SKILL §4.3 Step 2-5
 🔶 [P1] 根目录散落 3 个 .py 脚本 + parse-*.md —— 游离过程文件（§3 L1+ #2）
-        → 建议归位：脚本 → [feature-XX]/tools/ 或 mc-progress/scripts/；讨论 md → mc-debug/
+        → 建议归位：脚本 → [feature-XX]/tools/ 或 mc-progress/scripts/（**若是 skill 候选簇：互相 import/总一起跑 → 收进 `<簇名>/` 自足子夹、守解耦规矩，见 §B.3**）；讨论 md → mc-debug/
 ⬜ [P3] 无 mc-plan/ —— learning repo 非强制；若开始多步任务可建（没痛点就别建）
 
 ## 按类型/信号不适用（跳过，不算缺陷）

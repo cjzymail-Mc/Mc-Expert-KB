@@ -66,3 +66,27 @@
   - 不建议走 PID 链认窗：ConPTY/WindowsTerminal 宿主进程链断裂，`GetConsoleWindow` 返 0 已在 v1 实证。
 - **附带发现**：transcript 里 aiTitle 值自带 mojibake 尾巴（截断 UTF-8 → lone surrogate，「原�」）。hook 认窗用 `-eq` 精确比对，若渲染器设窗口标题时对同一串做了不同截断/清洗，可能出现「有 aiTitle 也对不上」的次生失配——修 #3 时顺手核一眼（现 Normalize-Title 只去前缀符号，没处理坏字符）。
 - **状态**：🔴 未修 · 仅登记（2026-07-03）。
+
+---
+
+## #4 · guard-delete.ps1 — 命令文本含字面删除词（grep 搜索词/注释/pin 文本）即误弹 ask，误打扰明显 🔴未修
+
+- **登记日期**：2026-07-04（用户指示：记 backlog、新 session 想办法修）
+- **现象**：`guard-delete.ps1` 对**根本没有真实删除**的 Bash 命令也强制弹 `ask`——只要命令串文本里出现 `rm`/`del`/`rd` 等删除词的**字面**（如 `grep -c "rm"` 的搜索词、`echo "含 rm"` 的注释标签、pin 命令 `--note "...rm/删除类..."` 的文本）。2026-07-04 plan10 会话里，因 forensic 主题正好是一条 **rm** 事件、多条命令含字面 rm → 连弹多次，打断 /free「全程无打扰」，用户明确不满。
+- **根因**：L3 的**回退全文正则路径**过粗。命令走 PowerShell AST 解析：**bash 语法命令（`for/do/done`、heredoc、`\` 续行、部分重定向）让 AST 解析失败**（`$errors.Count>0`）→ 落 `$fallbackPatterns` 全文正则（含 `'\brm\b'`/`'\bdel\b'`/`'\brd\b'`）→ 对**整条命令字符串**裸匹配，不区分"删除动词在命令位置"还是"只是引号里的搜索词/注释"。AST 解析**成功**的干净命令不受影响（走结构化路径、只在命令名/包装参数处判）。属注释里「误判只朝『多弹』掉」的 fail-safe 代价，但对"搜索/处理删除相关文本"这类正常工作误伤突出。
+- **证据**（喂命令给 hook 实测，2026-07-04）：
+  - STEP1 `for p in "rm" ...; do grep -c "$p" ...; done`（bash 语法 + 字面 rm）→ 返回 `permissionDecision:ask`，reason 原文「命令含删除/破坏动作(AST 解析失败，全文正则兜底匹配 /\brm\b/)，强制确认。」——**证实走 fallback 且匹配裸 rm**。
+  - STEP2 `cat CLAUDE.md | head -2`（无删除词）→ 空输出=放行。
+  - STEP3 `python pin_capture.py --note "harness 只对 rm/删除类硬编码弹窗兜底"`（干净 PS 语法 + 引号内 rm）→ **不弹**：AST 解析成功走结构化路径，`python` 包装只扫 `rmtree/os.remove/...` 不扫裸 rm → arg 里的 rm 不命中。三条对照直接定位「AST 失败 fallback + 裸 rm 正则」是误触发源。
+  - 旁证：本会话用来「测试 rm 会不会弹窗」的命令，因 echo 标签写了「含字面 rm」三字被自身弹窗、用户手动拒绝——即注释里的 rm 也触发。
+- **修法（建议，未实施；保持『真删除仍拦』不放松）**：AST 解析失败时别对**整条原始字符串**裸跑删除正则，择一或组合——
+  1. **剥字符串字面量再匹配**：先用轻量分词把引号内内容（grep pattern / 注释 / --note 文本）摘出、只对"命令位置 token"跑删除词正则（grep 搜索词、echo/printf/pin 文本多在引号内，剥掉即消大部分误报）；
+  2. **纯读命令白名单**：`grep/rg/cat/head/tail/echo/printf/less/awk/sed(无 -i)` 等确定不删的命令，即便参数含删除词也放行（但注意 `sed -i`/`xargs` 等要排除）；
+  3. **改进 bash 解析**：AST 失败时改用一个 bash-aware 的轻量 tokenizer（而非 PowerShell AST）判命令位置，从根上对齐结构化路径的判据。
+  - ⚠️ 边界：别过度放宽到「引号包裹的真删除」能绕过（如 `bash -c "rm x"`）——包装命令内嵌删除仍要抓（现 `wrapperPatterns` 已覆盖 sh/bash/xargs，改分词时别把这层丢了）。
+- **对工作方式的即时缓解（已入 memory `guard-delete-hook-pops-on-literal-rm`）**：搜索/读取优先用原生 Grep/Read/Glob 工具（hook matcher 只含 `Bash|PowerShell`，原生工具不触发），少用 Bash `grep/cat`——尤其搜索词含删除词时。
+- **状态**：✅ 已修 · 2026-07-04（L3.1）。
+- **实施记录（2026-07-04）**：按修法 ①+③ 组合落地（②纯读白名单未做——被 ①+③ 吸收，单独维护 sed -i/xargs 例外性价比低）。改母本 `Mc-Expert-repo/.claude/hooks/guard-delete.ps1`（`~/.claude/hooks` 是 Junction，三账号一次生效；脚本每次 fire 重读→即时生效不用重启）+ 同步 Mc-emoji skill 夹副本（hash 核验一致）。备份 `guard-delete.ps1.bak-20260704`。
+  - AST 失败分支改为：`Get-StrippedCommand` 剥引号字面量（`'...'`/`"..."` 含 `\"` 转义，未闭合吞到尾）→ 按 `; & | ( ) { } `` 换行` 切段 → 每段跳过控制关键字（do/then/for/sudo/…）/`VAR=x` 前缀/游离 flag 取**命令位置 token**（剥路径+`.exe`）→ 只对该 token 判 `$deleteVerbs`；命中包装命令（bash/sh/xargs/python/…）时**连引号内容一起**对原始全文跑 `wrapperPatterns`（守住 ⚠️ 边界）；git 段对剥引号文本跑 `gitPatterns`；另对剥引号全文补扫 `.NET Delete / rmtree / find -delete`。分词自身抛错 → catch 回落旧全文裸正则（误判仍只朝"多弹"掉）。
+  - 实测 7 探针全过：阴性③（STEP1 同款 for+grep 引号 rm/del/rd、for+echo **未引号**裸 rm 标签、STEP3 同款 pin --note 引号 rm）全放行；阳性④（for 循环内真 `rm "$f"`、`bash -c "rm $f"` 内嵌、裸 `Remove-Item -Recurse`（结构化路径回归）、for 循环内 `git reset --hard`）全弹 ask——阳性对照过关，非假阴性。
+- **遗留（已知取舍，按需再开新条）**：① 包装命令在场时对**原始全文**扫删除词——`bash -c "echo hi"` 同串里别处引号内恰有 rm 时会多弹（宁多弹不漏拦）；② heredoc 正文不剥——正文里行首恰为 `rm xxx` 形态仍会误弹（罕见，同向 fail-safe）；③ 兜底路径的删除动词**不走临时目录白名单放行**（bash 语法无 AST、静态判不了路径字面量）。

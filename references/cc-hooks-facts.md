@@ -20,6 +20,14 @@
 - **stdout 必须恒空**：UserPromptSubmit 且 exit 0 时，hook 的 stdout 会被 CC 当 **additionalContext 注入进用户 prompt** → 捕获/观测型 hook 里**任何 print 都不许**（会污染用户输入），诊断只写独立日志文件。这是「捕获型 hook」区别于「阻断型 hook」的硬约束。
 - 真实 stdin 字段 = `prompt`（非 `user_message`）；别猜字段名，写 probe-once 落盘坐实。顶层 try/except 全吞 + exit 0 只兜「脚本跑起来之后」，**兜不住「脚本根本没启动」**（那层靠上面的 launcher/短路）。
 
+## PreToolUse / 权限决策类 hook —— 拦截语义（2026-07-03 官方文档核实）
+
+> ⚠️ 核实 2026-07-03 · 官方 hooks 文档 + 本机实测。与上面两个具体 hook 不同轴：这是**权限拦截通用语义**（配 [[cc-permissions]] 一起读）。
+
+- **hook 的 deny 连 `bypassPermissions` 都拦得住**；hook **只能收紧不能放松**（hook 的 allow 不越过 settings 的 deny/ask）。多 hook 合并**取最严**：`deny` > `defer` > `ask` > `allow`。
+- **平台 fail-open**：hook exit 1 / 超时 → **照样放行**。强制拦截必须自己 `exit 2` 或返回 `permissionDecision:"ask"/"deny"`。**注意与 StopFailure 的 observ-only 相反**：PreToolUse 的 exit code / JSON **有决策权**，别把两类 hook 的退出码语义混为一谈。
+- **覆写守卫范式**（官方 `protect-files.sh`）：PreToolUse `matcher:"Edit|Write"` + 读 `tool_input.file_path` + 保护清单命中 → `permissionDecision:"ask"`；路径先**规范化**（`GetFullPath` 还原 `..`）再比对——官方示例的子串匹配不处理 `..` 穿越，自己补。护 settings/hook 自身社区通行 = deny 规则 + PreToolUse 路径清单**双层**（都非铁墙，最硬是容器只读挂载、Windows 不可用）。
+
 ## 通用反射（本卡两半共用）
 
 - **settings 改注册不热重载，但脚本文件内容即时生效**：改 `settings.json` 的 hook 注册命令行要重启会话；改脚本 `.py`/`.ps1` 逻辑不用重启（每次 fire 重读文件）。
@@ -30,5 +38,6 @@
 
 - StopFailure 认窗/焦点借还/闪窗重试等**实现演进**：`Mc-emoji/.claude/auto-memory/{cc-stopfailure-hook-observ-only,stopfailure-hook-fix}.md` + `[feature-03-take-a-nap]/2026-06-23 API-Error-自动恢复-方案.md`（Tier 0/1/2 分层）；hook 母本 = 本 repo `.claude/hooks/stopfailure-autocontinue.ps1`。
 - UserPromptSubmit 捕获口工程坑全景：`Mc-emoji/.claude/auto-memory/cc-userpromptsubmit-hook-pitfalls.md` + `[feature-05-loop-self-improvement]/plan04-hook兜底核实与铺开.md`；launcher 母本 = 本 repo `.claude/hooks/capture_launcher.py`。
+- PreToolUse 权限决策类 hook（guard-delete L3 + 覆写守卫）实现：`Mc-emoji/[feature-02-auto-Enter]/plan-权限守卫升级-2026-07-03.md`；hook 母本 = 本 repo `.claude/hooks/{guard-delete,guard-overwrite}.ps1`（四闸/正则表/reparse 检查等实现细节留源，本卡只收官方机制语义）。
 
 相关：[[../reflexes]]（先查再下结论）、[[loops-and-automation]]（含写操作的 loop 不无人值守）、[[cc-permissions]]

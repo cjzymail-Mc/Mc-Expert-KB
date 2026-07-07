@@ -19,12 +19,12 @@
 - [scaffold-placement-via-claudemd](decisions/scaffold-placement-via-claudemd.md) — 过程文件「落点规约」必须烧进每个 repo 的 CLAUDE.md（每冷会话唯一自动加载层；skill 按需救不了/auto-memory 错位/hooks 过度工程）；bootstrap 默认模板只固化「计划/产物/复盘三大类去向」普适内核，不抄 production 域内结构（防候选 B 翻版）。落地于 mc-scaffold-audit skill
 
 ## references/ — 事实手册
-- [cc-permissions](references/cc-permissions.md) — Claude Code 权限系统实测事实（方案 A + 5 个反直觉事实）
+- [cc-permissions](references/cc-permissions.md) — Claude Code 权限系统实测事实（方案 A + 6 反直觉事实 + **07-03 官方补强**：deny→ask→allow 官方确认/Windows 无沙箱→方案A唯一正解/受保护路径V1/模式辨别/CVE 黑名单必被绕）
 - [agent-teams](references/agent-teams.md) — Agent Teams 机制核实（2026-06-01，易过期）：teammate 可引 project-scope agent（mc-expert 无需转 user 级）+ mailbox/task list 自动对话 + Windows 走 in-process + **solo vs 冷启动 team 判据 / 关键门派 mc-expert 陪审（2026-06）** + **idle-零正文：故障模型+兜底单一权威节（2026-06-18 实证）——显式 SendMessage 必要不充分（in-process 投递 flaky + 疑似 session 截断）、有产物角色落盘承重；旧 Q8「显式即解决/不需落盘」已订正为指针**
 - [acceptance-ladder](references/acceptance-ladder.md) — 批量产线验收 = 五级首件递进阶梯（映射→内容→渲染→项目级→批量抽检；首件挑最难样本）〔Agent-4，2026-06-12〕
 - [task-decomposition](references/task-decomposition.md) — 长链任务交底协议（信息三层 / 两段合同 plan 批准制 / 盘点先行+追问义务+拍板点封闭化 / 纠输入不纠输出）〔Agent-4，2026-06-10〕
 - [loops-and-automation](references/loops-and-automation.md) — CC 自动化/Loops 架构（loop↔skill 正交 / 复用单位是 skill 非 agent / 五件套 / 台账=程序计数器 / 续命≠触发 / 原生优先 orchestrator 最后手段 / 写操作不无人值守）〔Mc-emoji 思考6，2026-06-12〕
-- [cc-hooks-facts](references/cc-hooks-facts.md) — CC hook 机制事实（StopFailure=observ-only 交互式续不了/真续走 headless `--fallback-model` / UserPromptSubmit exit-2=全局变砖 landmine→launcher 防砖 / stdout 恒空 / settings 不热重载但脚本即时）〔核 2026-07-02, CLI v2.1.193, 易过期〕
+- [cc-hooks-facts](references/cc-hooks-facts.md) — CC hook 机制事实（StopFailure=observ-only 交互式续不了/真续走 headless `--fallback-model` / UserPromptSubmit exit-2=全局变砖 landmine→launcher 防砖 / stdout 恒空 / settings 不热重载但脚本即时 / **07-03 补权限决策类 hook 拦截语义**：deny 拦 bypass·只收紧不放松·fail-open→exit2·覆写守卫范式）〔核 2026-07-02/07-03, CLI v2.1.193/159, 易过期〕
 
 ## agents/ — KB 自带 subagent
 - [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 只读规划、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
@@ -77,6 +77,19 @@
 - ⏸ 不入（域内/项目状态，留源 repo）：`capture-wordlist-recall-blindspot`(feature-05 域) / `wuprj-loops-never-ran-for-real`(项目状态) / `mc-emoji-uses-both-3account-junctions`(junction 基建) / `chartjs-bake-overlay-route-validated`(deck 域，ppt-html-route 已覆盖) / `stopfailure-hook-fix`(实现细节，机制子集已并入 cc-hooks-facts) / `feedback_reserve_annotation_block`(交互偏好，窄+低频) / `l4-fuel-gate2-already-met` / `user-language-chinese-only`。
 - 未提交：用户手工 push。
 
+## 2026-07-03 巡检轮（Mc-emoji 权限守卫升级 + reflect 管线签字桌收割）
+
+> 主动巡检：仅 Mc-emoji 有 07-02→07-03 新料，其余源 repo 静默（3rd-ppt STATE 触碰=噪声、Agent-3/Wu Prj 无新增）。主料 = 权限守卫升级 plan（3 subagent 核官方文档）+ reflect 管线签字桌 + 4 条 07-03 auto-memory。
+
+- ✅ **A1 `cc-permissions` 官方补强**（append）：deny→ask→allow 从实测推断→**官方明文**；**Windows 无沙箱→方案 A+hook 是唯一正解**；受保护路径机制 + **本机 V1 实测 user-scope `.claude` 未被覆盖**；模式辨别（dontAsk/auto 17%假阴性/acceptEdits 更松）；CVE 黑名单必被绕→靠 hook AST 分层。核实 2026-07-03 / CLI v2.1.159 / 易过期。
+- ✅ **A2 `cc-hooks-facts` 补权限决策类 hook 拦截语义**（append，现卡无此对照点）：hook deny 拦 bypass / 只收紧不放松 / 多 hook 取最严 deny>defer>ask>allow / **fail-open→强制拦截须 exit 2（与 StopFailure observ-only 相反）** / 覆写守卫 protect-files 范式 + guard-overwrite.ps1 母本指针。
+- ✅ **B `reflexes` 扳机①注释补「交付宣称」**：说『能用/双击即用/搞定』前先目标环境实测。源 = reflect 签字桌 #4 用户已签字点名"下轮 /KB-update 补"（默认=补注释、不单列新扳机）。
+- ✅ **C `loops-and-automation` §7 补硬约束轴**：**Pro 订阅 OAuth 技术上跑不了无人值守定时**（400 organization disabled），真定时须 API Key。标易过期（Anthropic 政策）；另 3 层环境调试细节留源。
+- ✅ **D `principles` 交互风格补「双层呈现」**：文档严谨技术语 / 汇报大白话，但拍板点仍给全候选+默认+赌注。源 = `plain-language-reports-rigorous-docs`（已活在 Mc-emoji CLAUDE.md，本轮升为跨 repo 偏好）。
+- ⏸ 不入：`commit-push-at-milestone`（太薄，精神已被 prefer-autonomy 覆盖）/ `deploy-guard-hook-new-machine-steps`（换机部署 runbook，已在 SKILL-rm-permission）/ `headless-probe` command / Mc未来思考9（源 chat，已蒸馏进 loops-and-automation+plans）/ guard-delete 四闸实现细节（域内，留源）。
+- **边界克制**：guard-delete 四重闸门/包装器正则表/reparse 检查 = 实现细节留源 repo，KB 只收官方机制事实 + 分层防御原则。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
@@ -86,7 +99,7 @@
 | `3rd-ppt-prj` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖（含孤儿审计）；过程文件≤05-29，无新增可入 |
 | `[Agent-3] Info Classifier` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖；过程文件≤06-02，无新增可入 |
 | `[Agent-4] Wu Prj` | 2026-06-26 | 2026-06-26 | 富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
-| `Mc-emoji` | 2026-07-02 | 2026-07-02 | **07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
+| `Mc-emoji` | 2026-07-03 | 2026-07-03 | **07-03 收权限守卫升级 + reflect 签字桌**：A1 cc-permissions 官方补强(Windows无沙箱/受保护路径V1实测/模式辨别/CVE) / A2 cc-hooks-facts 补权限决策类 hook 拦截语义(deny拦bypass/fail-open→exit2/覆写守卫) / B reflexes 扳机①补交付宣称 / C loops §7 补 Pro OAuth 不能无人值守→须API Key / D principles 补双层呈现。已否：commit-push-at-milestone / deploy-guard换机runbook / headless-probe / 思考9源chat / guard四闸实现细节。〔历史〕**07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 
 ## Stage 1 状态
