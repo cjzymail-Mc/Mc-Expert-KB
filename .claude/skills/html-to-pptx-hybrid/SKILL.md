@@ -71,6 +71,10 @@
 > **绝不要在 Python 里估 bbox 画白块去盖底**（= C-14 反模式：残留边框/彩条/marker、"背景一动残件跟着动"，
 > 且违反 §0「Python 只是调度员、不和浏览器引擎硬刚」）。决策点在此、药方在 §11，别在岔口自己发明土法。
 
+> **★ 交付形态警示**：本节四层架构的默认产物（整页截图打底 + overlay，即 M-export「折中烤底图态」）是**中间态、非交付件**——
+> 图表 / 装饰块烤死在底图、不可编辑、不可独立挪动。交付**默认走 §11 元素拆分（M-split）**；**某体裁是否启用拆分由体裁层声明**（见 §9），
+> 交付形态判定门见 §11。别拿折中态当终件交（用户多次返工打回的坑，根因＝形态规范只在体裁层未回灌公共内核）。
+
 ---
 
 ## 3. 三脚本管线 + 验收
@@ -121,13 +125,18 @@ helper 函数族（`add_textbox / add_bullets / add_picture_cover(crop 模拟 ob
 4. **表格逐 cell 抓真实色**：extract 端记每 cell 的 `color` + 背景色进 manifest，export 忠实重绘 —— 皮肤无关，
    **别在 export 硬编码表头色**（QD 红 vs RD navy 不同）（C-13）。
 5. **单行标题 NO_WRAP + 居中框满框重置**：见 C-11 / C-10。
+6. **★翻页式 / 懒加载 deck 前置**（2026-07-09 幸运星GT 实证，详见 C-17）：若 deck 是**翻页式**（`.slide` 默认 `opacity:0/visibility:hidden`，只 `.active` 可见；`.prev` 带 `translateX(-40px)`+`overflow:hidden` 会裁切）且 **canvas / JS 内容懒加载**（只在 `goTo(i)` 时才 `buildChartsFor()` 绘制，Chart.js 动画 ~700ms），screenshot / extract 变体必须：
+   - **逐页 `page.evaluate("goTo(i)")` 激活**再截/提取——不能只手动加 `.active` 类（`goTo` 才触发 `buildChartsFor` + 清 `.prev`，否则截到空白页或被 translateX 裁切）；
+   - 截图前等该页 **canvas 非空像素 + 动画落定 + 像素稳定**（连续两次采样非透明像素数一致；单次"非空"不够——轴/网格先画、数据后动画进来，早期就非空但没画完）；
+   - **JS 注入文字页**（如 `#rankList` 排行榜）extract 必须先 `goTo` 注入完才 collectRuns（否则 C-16 凭空消失）；canvas 位图归截图层、JS 注入**文字行**归 overlay，别混为一谈。
+   - extract 坐标本身不靠激活（`getBoundingClientRect` 对 hidden 元素仍返布局盒，transform 作用于整页→rel 抵消），仅 JS 注入文字页激活是必需——建议复用 screenshot 的同一激活例程，单一代码路径 + 状态一致。
 
 > 加新皮肤的产出 = 一个 `skins/`-级皮肤包（视觉 token 表 + 模板/example + 该皮肤的 extract/export 变体或参数），
 > 指回本内核。详见 §9。
 
 ---
 
-## 6. 已知坑表 C-1 ~ C-16（全部踩过，开工前通读）
+## 6. 已知坑表 C-1 ~ C-17（全部踩过，开工前通读）
 
 | # | 坑 | 根因 | 修复 |
 |---|------|------|------|
@@ -147,6 +156,8 @@ helper 函数族（`add_textbox / add_bullets / add_picture_cover(crop 模拟 ob
 | **C-14** | 元素拆分时在 Python 里"估算 bbox 画白块"清底图→残留边框/彩条/marker（背景一动残件跟着动） | 违背 §0「浏览器当相机」哲学、Python 干像素活；文字 bbox≠真实块框（含 border/min-height/顶部 bar） | **浏览器精确抠图**：`element.screenshot(omit_background=True)` 抠透明精确 PNG + 扩 MASK_CSS `visibility:hidden` 出干净底图。★两态时序：**先拍 promoted 元素→再加 hide-mask 拍底图**（写反=空 PNG 静默假成功→PNG 非空自检兜底）；★坐标用浏览器内 `closest('section.slide')` 同帧算（`element.screenshot` 会滚动→缓存 slide.box 与后取 el.box 错位出负坐标）；★dsf=3 → `AddPicture` 显式 `bbox×SX/SY` pt。详见 §11（2026-06-25 RD49 3结构+RD48 全量27页实证） |
 | **C-15** | `AddShape(5,…)` 圆角矩形（roundedRect）圆角"太夸张" | **没显式设圆角** → PPT 用默认 `Adjustments(1)=0.16667`（≈shorter_side 的 1/6，大框上几十 pt，远大于 CSS 的 10px） | 显式设：`adj = CSS_radius_px×0.75 / min(W_pt,H_pt)`（clamp ≤0.5）。★win32com **不支持** `Adjustments[1]=v`/`.Item(1)=v`（`TypeError: object does not support item assignment`）→ 走底层 property-put：`shp.Adjustments._oleobj_.Invoke(0,0,pythoncom.DISPATCH_PROPERTYPUT,False,1,adj)`（Item 是默认成员 DISPID=0，索引 1 + 值）。脚本 `split_deck_elements.py` 的 `set_corner()` 封装；所有 native 圆角件（面板框/卡片/marker bar）都过它（2026-06-29 RD48 25-27 用户实测「圆角夸张」） |
 | **C-16** | 非 whitelist 的**文字**类在 PPT 里凭空消失 | 遮罩 `MASK_CSS` 把**所有**文字设透明（不只装饰）；只 whitelist 文字才有 overlay 补回 → 文字类（`.blockhead`/`.feat`/`.ft`/`.fd`/`.flow .arr`…）不入 whitelist = 既不进截图也不进 overlay = **消失**。§5 步1"不入白名单=留截图层"仅对纯装饰成立，文字类是陷阱 | extract 后**逐页核对 manifest role 清单 vs deck 实际 class**；deck 用了 whitelist 外的文字 class 就补进 `TEXT_SEL`（2026-07-01 RD48 项目背景调研附件实证：5 徽块 + 8 blockhead + 7 箭头差点消失） |
+| **C-17** | **翻页式 + 懒加载 canvas deck** 直接遍历截图 → 空白页 + 图表/JS 注入内容全缺 | deck 用 `visibility:hidden`/`opacity:0` 分页（只 `.active` 可见；`.prev` 的 `translateX(-40px)`+`overflow:hidden` 裁切）+ canvas/JS 注入内容只在 `goTo(i)` 时 `buildChartsFor` 绘制；内核 `goto+wait_800ms+遍历截图` 假设所有 slide 同屏即开即渲染 | screenshot/extract 写**皮肤级变体**：逐页 `page.evaluate("goTo(i)")` 激活（不能只加 `.active` 类，`goTo` 才触发画图+清 `.prev`）+ 等 canvas 非空像素 + 动画(~700ms)落定 + **像素稳定**（连续两次采样一致）；**JS 注入文字**（排行榜等）extract 须先 `goTo` 注入（否则 C-16 消失），归 overlay 不归截图层；坐标本身不靠激活。详见 §5 旋钮6（2026-07-09 幸运星GT 试穿反馈 deck·13 页翻页式 + 6 Chart.js 懒加载实证） |
+| **C-18** | NO_WRAP 文本框宽度塌成 ~1 字宽（0.20in），右对齐框落点全偏左 | win32com `AddTextbox` 后若 `tf.WordWrap=0` 设在 `tf.AutoSize=0` **之前**，WordWrap=0 在 autofit 默认态触发 PP 把框缩成一字宽 | **`tf.AutoSize=0` 必须先于 `tf.WordWrap=...`**。隔离验证：四顺序对照（A WordWrap先→0.20in ✗ / B AutoSize先→9.83in ✓）。影响所有 NO_WRAP 框（eyebrow/标签/KPI/ao…）（2026-07-09 幸运星GT 实证） |
 
 ---
 
@@ -166,6 +177,12 @@ helper 函数族（`add_textbox / add_bullets / add_picture_cover(crop 模拟 ob
 - **Windows 坑**：`app.Visible=False` 抛 COM 错（"Hiding the application window is not allowed"），装配必须 `True`；
   验收脚本可 `Open(WithWindow=False)` 略过。
 - **机器 PASS ≠ 人工验收**：交付措辞区分"自检 PASS"vs"待你人工肉眼验收"，附产物路径 + 重点看哪几页。
+- **★ GLM-vision 验收的可靠性边界**（2026-07-09 幸运星GT 实证）：经 Anthropic 兼容层调 GLM vision（`analyze_image`）做渲染验收时——
+  - **大尺度可作辅助参考**（gross 布局 / 文字是否落在色块内 / 有无重影），**但不替代肉眼、不作 PASS 判据**；小字 / 低分辨率弱（实测低分辨率 probe 连"几个块"都数错：报 4 实 5）。
+  - **底线前置**：坐标对不对靠 **python-pptx 读明文 = ground truth**（客观，不靠 vision）；vision 只作 gross 旁证，两路一致才稳。
+  - **"对答案"测试法（防附和）**：别开放式问"对不对"，问 **prompt 不透露的精确细节对答案**——拿 manifest 当 ground truth 出题（如"标题第 3 字 / 某数值=4.32?"），答对才信其大尺度判断。
+  - **probe 要高清**：`probe/ppt_slides_to_png_clipboard.py` 的 640×360 对 vision gross 判断不够；改 COM `Slide.Export(path,"PNG",1920,1080)` 高清导出（暂无内核脚本，临时内联）。
+  - 退路括号：形态门→§11 / 坐标自检→本节 / 像素重影=无脚本靠肉眼。
 
 ---
 
@@ -222,7 +239,7 @@ py -3 -X utf8 verify_deck_report.py <out.pptx> <manifest.json>
 ## 11. 元素拆分模式（split-decompose）★C-14 实证
 
 > 何时用：deck 已是「整页栅格化、文字烤死」的**退化态**（截图没走 mask / export 没叠 overlay，常见旧路径产物），
-> 或用户要在 PPT 里**手工微调/加字/独立挪动单个块**。目标终态 = **每页文字可编辑 + 装饰块逐个独立可动对象 + 干净底图**。
+> 或用户要在 PPT 里**手工微调/加字/独立挪动单个块**，**或产物还停在 M-export「折中烤底图态」中间态**（§2 四层默认产物：整页截图打底 + overlay，图表/装饰块烤死不可动 —— 交付前须拆，见末尾「交付形态判定门」）。目标终态 = **每页文字可编辑 + 装饰块逐个独立可动对象 + 干净底图**。
 > 驱动脚本 `scripts/split_deck_elements.py`。**先按本节核对，别凭记忆改。**
 
 ### 一句话原理
@@ -248,6 +265,7 @@ py -3 -X utf8 verify_deck_report.py <out.pptx> <manifest.json>
 
 ### 嵌套 + 空白门 + 块白名单
 - **嵌套**：只提升**最外层**白名单块（`e` 无白名单祖先），子块随父 PNG 一起进图，避免双重提升。`.card` 若含白名单子块→回退 PNG（原生矩形会丢子块）。
+- **★嵌套拆分块的文字必须单独抽取（勿吸进父级流式文本）**（2026-07-09 幸运星GT `.pt-q` 实证）：若一个被 split 抠成独立 PNG 的块（引述块 `.pt-q`）**嵌套在某个被 extract 抓取的文本元素内**（`.pt-body`），`collectRuns` 会 walk 进去把块文字**吸进父级流式文本** → 父级文本框（字体不同→换行不同）与块 PNG 错位、文字飘在块外。**修法**：extract 端 ① `collectRuns` walk **跳过该块子树**（父级只留描述）② **单独抓该块文字**、对齐**块自身 bbox**（与 split 的 `RELJS` 同一基准）→ 文字框与块 PNG 严丝合缝。通用规律：任何"既被 split 抠块、其文字又被某父级文本元素吸走"的嵌套结构都适用；换皮先核 `TEXT_SEL` 与 WL 的嵌套关系。
 - **空白门**（确定性，别按页号硬编码）：扩 hide-mask 后测底图灰度 `extrema`；近匀且接近页背景色 → **真空白丢底图**（原生白底，全可编辑、文件更小）；有页级真装饰（封面/分隔渐变）→ **保留底图**。
 - **块白名单 WL**：`split_deck_elements.py` 顶部 `WL` 为 RD38 皮实证集。**换 deck / 换皮先核 WL** —— Playwright 跑「每页最外层白名单块」探测（见脚本 NESTED 逻辑），补齐该皮独有装饰块 class，避免漏拆（曾漏 `.lane/.step/.arr/.note`→用户抓到"背景一动残件跟着动"）。
 - **marker overlay 偏移是 per-皮 tuned 常量**：补绘 `li::before` 方块 marker 的逐 li `+2/+9`（脚本内）偏移按 RD38 皮的行高/字号手调，**不是通用量**。换页型/换皮→C-12 重影/漂移属 page-instance 失败模式，必**独立重验**（别假定沿用；jury 曾现读脚本 line 才发现是 tuned 常量）。
@@ -255,6 +273,17 @@ py -3 -X utf8 verify_deck_report.py <out.pptx> <manifest.json>
 ### 强制阶梯（沿用 §7）
 ①前 3 页(封面/目录/分隔) → ②各块型代表页(对比/指标/时间线) → ③特例(twobox/box) → ④全量。每页**渲染肉眼核 + PNG 非空自检**；机器 PASS≠人工验收。
 **新鲜度红线**：manifest 必须是**当前 HTML** 抽的（HTML 晚于 manifest 就 `extract_deck_report.py` 重抽到新文件，别用旧 manifest 否则文字过时/token 残留）。
+
+### 交付形态判定门（皮肤无关 · 必要非充分）
+
+> 折中烤底图态（§2 四层默认产物 / M-export 中间态）**仅中间态，绝不作交付件**——图表与装饰块烤死在底图、不可编辑不可独立挪动。
+> 交付**默认走拆分态**（本节 M-split）；**某体裁是否启用拆分由该体裁 skill 显式声明**（现场评审＝启用；竞品/汇报皮无独立验证不强加）。
+> 即内核只持「默认 + 中间态警示 + 怎么判定」，启用决策在体裁层（§9）——别把"必须拆"焊进内核。
+
+- **形态门（可机器判定、皮肤无关）**：python-pptx 数每页「仅 1 张满幅 Picture（≈占满整页）」的页占比——折中件 ≈100%、拆分件 ≈0%。
+  标注**必要非充分门**：占比 ≈0% 只证"非折中整页底"，**不证**"拆分正确 / 块都对"；仍须 §7 渲染肉眼核 + 陪审。
+  阈值是**经验值**（RD53 实测 100%→0%，样本尚薄）——按皮校准，别当物理常数。
+- **未提升为独立脚本**：本 skill `scripts/` 暂无形态门脚本（逻辑简单，可内联 `verify_deck_report.py` 或临时数）；固化为独立脚本属**可选加强项**（pending）。
 
 > 成熟度（§6.1 两轨）：2026-06-25 RD49（3 结构：空底+卡片/渐变封面/密集泳道）+ RD48（全量 27 页跨全块型）实证。
 > 技法 = stable；`split_deck_elements.py` 的 WL 是 **RD38 皮专属**，换皮属 draft（需按"换 deck 清单"重核）。

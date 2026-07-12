@@ -63,3 +63,39 @@ description: 用 Agent Team 执行任务的入口（类似 /today）。读取当
 2. **B 只压「循环内决策门」，不压「用户显式定义的交付/验收门」。** 两类门要分清：①循环内决策点（plan 审批、低置信选型）——B 压掉、自走；②用户显式定义的交付/验收门（如素材审核门、成品人工验收）——**B 不压，照常产出给用户**。换个门结构时，别因为选了 B 就把用户想要的门跳过、也别把用户的验收门误当循环决策吞掉。
 
 > 机制细节、为什么这样设计：见 KB `Mc-Expert-repo/references/agent-teams.md`「新手 FAQ」+ `Mc-emoji/[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`。
+
+## 收尾 · 微型 loop：mc-update → pin → session-new（Clean up team 之后、每次正常收尾必走）
+
+team 清理完（lead 跑完 `Clean up the team`）、本次任务**正常收尾**后（完成、或带卡点上报但未熔断），按 **mc-update → pin → session-new** 顺序跑一遍收尾固化。三个环节都是**先预判、再决策执行**，不是无脑跑；目的是省掉用户每次手敲 `/mc-update`、`/pin`、`/session-new`，并把本次任务里 **capture_hook 词表漏网的纠正**捞进 feature-05 捕获网。**全程由 lead 执行**（teammate 此刻已 shutdown、不派给他们——pin 陪审走临时 `@agent`(mc-expert) 一次性，见下）。
+
+**触发边界**：
+- 正常收尾（完成 / 带卡点上报）→ 进本 loop。
+- **熔断 / halt 交用户 / 任务无实质进展**（红线③ 连续失败 2 次熔断等）→ **跳过 mc-update 和 pin**（mc-update 纪律就是"只在任务完成后走"、pin 是"捞本次纠正残留"——未完成/无产物两段都没意义）；但 **session-new 仍走**——预判里点明"本次未正常完成，建议 session-new 固化中断/卡点现场 + team-progress 归档指针以便接续"。
+
+**mc-update → pin → session-new 的顺序语义**：mc-update 先固化"本次经验/记忆层"；**pin 居中**——捞 mc-update 判定后仍漏网的纯陈述式纠正（若 mc-update 判"无新可固化"，pin 预判多半也是"无漏网纠正"）；session-new 最后固化"本次讨论/状态层"做交接（含 team-progress 归档指针），并落 pin 段报告行（见下）。三者职责不重叠（mc-update 偏 memory/feedback、pin 偏 feature-05 燃料补漏、session-new 偏 plan/状态文件 + 归档指针）。
+
+**每个环节两步走**：
+
+1. **预判（必带，不能套话）**：基于**本次任务的实际产物**（team-progress、teammate 产出文件、记忆候选等）给一句话预判——"有/没有可固化（mc-update）/ 漏网纠正（pin）/ 可交接（session-new）的东西，建议跑/不必跑"+ 一句**具体理由**。每次任务的明细、中间产物、来源入口都不同，预判必须落到本次实际，禁止"建议跑 mc-update"这种通用套话。
+2. **决策 + 执行**：
+   - **A 模式（人工驱动）**：lead 用 AskUserQuestion 弹问用户，把预判写进选项描述（让用户看着预判拍板）——**判断权在用户**。选"是" → **用户不再手敲**，lead 直接用 Skill 工具调用 mc-update / session-new 执行（pin 段见下、走陪审通道）。选"否" → 跳过。
+   - **B 模式（深度放权）**：lead **不转交用户**，按铁律 1「默认 > 成功率最高 > 最易回滚」自己判 mc-update / session-new 要不要跑，逐条记进 team-progress 的 `## 自主裁决(B)` 区 + 浮到交付汇报的待确认项（恒定不变量 1）。**熔断场景仍按上面"触发边界"处理**——不让 B 模式给 mc-update 续命。
+
+**★ pin 段（居中 · feature-05 补漏层 · lead 执行）**——**判据单一指针见 KB `Mc-Expert-repo/references/收尾loop判据.md`**（PIN/DROP 判据、方案 a 去重、掉线降级、陪审 spawn 五要素都在那；本 skill 只写控制流、不抄判据，改判据只改那一处）：
+1. **预判闸（必带）**：一句话判"本次有无词表漏网的纠正迹象"——**无迹象直接跳 pin 段、不派 mc-expert**（省陪审成本）。有迹象才往下。
+2. 有迹象 → 回顾本次任务列纠正候选（**认不出不硬造**，pin.md 铁律）。
+3. **去重（方案 a）**：Grep/Read 本会话 `live-candidates.<session>.jsonl`，capture_hook 已抓的剔除。
+4. **派 mc-expert 陪审**：team 已 shutdown，**临时 `@agent`(mc-expert) 一次性**（用完即释，呼应建队执行「陪审不省」）；候选 ≥2 条一次 spawn 全给、逐条判，单条才单发。spawn prompt 五要素 + 红线"只给 PIN/DROP+依据、不复述纠正、不顺势修错、**不附概率分**"见判据指针 §5。
+5. **掉线降级**：mc-expert 零正文 / Connection closed → 重试 1 次 → 仍失败 → 该候选落 `Loops/review-queue.md` 交用户补判（**不硬 pin、不 DROP、不连试 ≥2 次**，细则见判据指针 §4）。
+6. **落账**：只对陪审 PIN 的跑 `pin_capture.py`（`--corr`/`--ai`/`--note`/`[--followup]`）；lead 调用前自校验 fail-loud（陪审缺 PIN/DROP/纠正原文/依据 → 不硬凑参数，见判据指针 §6）；候选为空 → 静默跳过。
+7. **报告行**：pin/drop/掉线降级任一发生 → 在 session-new 段产出的 plan 里记一行 `pin N / drop M / 降级 K 落 review-queue`。
+
+**一致性约束（堵 B 模式 lead 自判跳过偏差）**：
+- 收尾三段**每段预判一句话 + 跳过必给具体理由**，不许套话跳过。
+- **B 模式下 pin 段预判闸判"无迹象"可直接跳**（事实判断）；**但只要"有迹象"就必须派陪审、不许自判"算了不 pin"**——靠本 checklist 收窄走样空间，**但不保证**（要保证"必跑"只能路线 C Stop hook，本版未实现）。
+
+**两层判断边界（别越权）**：本 loop 只判"**要不要启动** mc-update / pin / session-new"。启动之后——写不写记忆、pin 哪条、产不产 plan——是 mc-update / pin_capture / session-new **各自流程的职责**（mc-update 有频次/去重两道闸门、pin 走判据指针、session-new 有自己的四步），team-task 收尾不替它们判、也不重复其内部逻辑。
+
+**B 模式下 session-new 的边界**：lead 判"跑 session-new" = 走固化交接流程（产 plan + 更新状态文件 + team-progress 归档指针），**不是强制清空/重开 session**——真正关 session、重开仍由用户操作，lead 不替用户决定何时真关。
+
+**session-new 段幂等（防 loop 重入产重复 plan）**：session-new 重入前查本会话 plan 是否已存在（同名/同任务），存在则跳过、不堆重复/空 plan。

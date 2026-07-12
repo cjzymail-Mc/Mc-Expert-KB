@@ -90,6 +90,15 @@
 - **边界克制**：guard-delete 四重闸门/包装器正则表/reparse 检查 = 实现细节留源 repo，KB 只收官方机制事实 + 分层防御原则。
 - 未提交：用户手工 push。
 
+## 2026-07-07 收割轮（探索期引用入 principles + hook 改动评估）
+
+> 手上候选（非主动巡检）：① 任务背景1 = 上轮 mc-expert 陪审拍板的 A 方案（探索期规范入 KB）；② 任务2 = 用户 deploy 后问 hook 改动要不要 update。
+
+- ✅ **E `principles`「架构与控制」簇 append「探索期乱得便宜/引用不许伸手」**：建探索脚本/拆 skill 时文件可随手放、但簇内禁伸手引兄弟目录/禁写死私料（病根=引用耦合非位置，别读成"要整洁"）。**只交叉引用 mc-scaffold §B.3（规约）+ 源 memory（行为），不复制正文**。源 = Mc-emoji `feedback_place_files_for_future_extraction`（plan09 / 07-04 hybrid 剥离，用户点名"真正有价值的经验"）。过闸：KB grep 零命中（新对照价值）× 轻量引用（维护成本极低）× 情景性故入 principles 非 reflexes（reflexes 要双 repo 命中、本条只 Mc-emoji 踩一次）。不升 user 级 CLAUDE.md 常驻（会撞 mc-scaffold「只放指针、别烧进冷启动 CLAUDE.md」旧决定）。
+- ⚠️ **「张冠李戴待办 memory」经核实无可落点**：上轮叙述称"有条待办 memory 写'下轮给 principles 补一行'、被误当给探索期、实为给双层呈现"——grep 全 Workshop + 两处 memory（Mc-emoji auto-memory / glm user-memory）均无此待办；双层呈现 07-03 轮已 ✅ append（见上段 D）。故无待办可修正，**不凭空编**（守文档诚实 + verify-before-asserting）。
+- ⏸ **任务2 hook 改动不入 KB**（domain 实施细节 + glm 账号状态变更，非跨 repo 普适经验）：capture_launcher 注释 3→4 账号（机制已在 cc-hooks-facts）/ guard-overwrite 保护清单硬编码→通配 `*\.claude*\` 覆盖 4 账号（已在 .ps1 注释自解释 + cc-hooks-facts 有守卫范式指针）/ stopfailure 撤销 glm 排除门（glm 部署决策；cc-hooks-facts 的"observ-only 机制事实"不变、无需订正）。**留痕建议**：glm 门撤销如要记，更新 Mc-emoji inbox `stopfailure-hook-fix`（非 KB 内容层）。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
@@ -99,7 +108,7 @@
 | `3rd-ppt-prj` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖（含孤儿审计）；过程文件≤05-29，无新增可入 |
 | `[Agent-3] Info Classifier` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖；过程文件≤06-02，无新增可入 |
 | `[Agent-4] Wu Prj` | 2026-06-26 | 2026-06-26 | 富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
-| `Mc-emoji` | 2026-07-03 | 2026-07-03 | **07-03 收权限守卫升级 + reflect 签字桌**：A1 cc-permissions 官方补强(Windows无沙箱/受保护路径V1实测/模式辨别/CVE) / A2 cc-hooks-facts 补权限决策类 hook 拦截语义(deny拦bypass/fail-open→exit2/覆写守卫) / B reflexes 扳机①补交付宣称 / C loops §7 补 Pro OAuth 不能无人值守→须API Key / D principles 补双层呈现。已否：commit-push-at-milestone / deploy-guard换机runbook / headless-probe / 思考9源chat / guard四闸实现细节。〔历史〕**07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
+| `Mc-emoji` | 2026-07-07 | 2026-07-07 | **07-03 收权限守卫升级 + reflect 签字桌**：A1 cc-permissions 官方补强(Windows无沙箱/受保护路径V1实测/模式辨别/CVE) / A2 cc-hooks-facts 补权限决策类 hook 拦截语义(deny拦bypass/fail-open→exit2/覆写守卫) / B reflexes 扳机①补交付宣称 / C loops §7 补 Pro OAuth 不能无人值守→须API Key / D principles 补双层呈现。已否：commit-push-at-milestone / deploy-guard换机runbook / headless-probe / 思考9源chat / guard四闸实现细节。〔历史〕**07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 
 ## Stage 1 状态

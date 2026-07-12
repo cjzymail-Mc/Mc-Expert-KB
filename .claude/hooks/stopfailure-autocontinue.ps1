@@ -16,9 +16,9 @@
 #   ② 借完复核 fg==T 才敲、敲完 drain 再还（防 continue 泄漏进别的窗口）；
 #   ③ 全局单飞锁串行化借还（防多会话同时报错时两实例抢焦点打架）；④ 借完务必把焦点还回原窗口。
 #
-# 四道安全门（全过才敲键）：
-#   ① 账号门：glm（CLAUDE_CONFIG_DIR 叶名 = .claude-glm）不是原生 Anthropic 账号 → 只记日志不敲键。
-#             （deploy 脚本默认也不往 glm 注册；本门是脚本层双保险。）
+# 三道安全门（全过才敲键；原①账号门 2026-07-07 已撤销，实际生效 ②③④）：
+#   〔原①账号门·已撤销〕glm 不再排除——用户拍板 glm 也上 autocontinue（敲键续接），observ-only
+#             不再适用 glm；deploy 脚本同步纳入 glm。原"glm 非原生账号→只记日志不敲键"的代码门已删。
 #   ② 错误类型门：仅瞬时错误（连接中断/overloaded/server_error/unknown/rate_limit）才续；
 #                 auth/billing/invalid_request/model_not_found 续了也白续 → 只记日志。
 #   ③ cooldown 门（防自动续死循环）：同 session 300s 内最多自动续 2 次，超限只记日志。
@@ -69,13 +69,8 @@ if ($snip.Length -gt 300) { $snip = $snip.Substring(0, 300) }
 
 # ====================== 安全门 ======================
 
-# ① 账号门：glm 排除
-$cfgLeaf = ''
-try { if ($env:CLAUDE_CONFIG_DIR) { $cfgLeaf = (Split-Path -Leaf $env:CLAUDE_CONFIG_DIR).ToLower() } } catch {}
-if ($cfgLeaf -eq '.claude-glm') {
-  Write-Probe "skip(glm非原生账号) tail=$snip"
-  exit 0
-}
+# 〔原①账号门·2026-07-07 B2 已撤销〕glm 不再排除——用户拍板 glm 也上 autocontinue（敲键续接）。
+# 原 $cfgLeaf=='.claude-glm' → skip+exit 的代码已删，glm 走正常敲键流程，受 ②③④ 三道门保护。
 
 # ② 错误类型门：终态错误不续
 if ($snip -match 'authentication|billing|invalid_request|model_not_found') {

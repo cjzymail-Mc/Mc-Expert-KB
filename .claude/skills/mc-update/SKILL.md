@@ -1,4 +1,9 @@
-任务完成后的文档更新流程。
+---
+name: mc-update
+description: 任务完成后的文档更新流程——判断要不要固化记忆（频次+去重两道闸）→列候选等用户审→归属判断（auto-memory vs memory vs fix/Mc-debug）→执行+CLAUDE.md/STATE.md 同步。仅当用户显式输入 /mc-update 时触发，不做 model-driven 自动调用。
+---
+
+# mc-update（任务完成后的文档更新流程）
 
 > **说明（user-scope 统一版）**：本文件是各 repo `mc-update.md` 的合并版，落地在 user-scope，所有 repo 共用；无本地覆盖。
 > - CLAUDE.md / STATE.md 章节号已去除，改为语义化引用（如"CLAUDE.md 命令表"）。各 repo 跑时按本地编号自行映射。

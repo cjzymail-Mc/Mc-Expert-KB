@@ -41,5 +41,6 @@
 - **PowerShell 含 `[]` 路径必须 `-LiteralPath`**：本项目所有 feature 在 `[featureNN-...]` 下，FS cmdlet 默认加 `-LiteralPath`，否则 `[]` 被当通配符报错。〔Agent-3 + 本次实测复现〕
 - **改 settings/配置先 .bak**；权限用方案 A，不主动开 bypassPermissions。〔Mc-emoji〕
 - **Git Bash 里 `python3` 是 WindowsApps stub，exit 49 静默失败**（不报错、无输出）——跑脚本/校验一律用 `python`；原生 python 不认 `/tmp`，临时文件走 Windows 路径（`tempfile.gettempdir()`）。〔Agent-4〕
+- **user-scope junction 路径是跨 repo 共享契约**：`~/.claude/` 下 commands/skills/agents 的脚本经 junction 给所有源 repo/账号共享（`$env:USERPROFILE\.claude\...` 借同一份物理文件，一处改处处见效——红利与代价同源）；**改其位置 / 删 / 改名前，grep 必须含所有源 repo**（不只扫当前 repo 或母本 repo），否则漏掉借用者、挪了断跨 repo 调用。〔Mc-emoji feature-06 plan05，2026-07-12：autopilot_failcount.ps1 被 Wu Prj sub-plan-16 跨 repo 硬编码调用，险当 today 私有挪走，幸 mc-expert 跨 repo 扫到〕
 
 相关：偏好底座 [[principles]]；架构决策 [[decisions/orchestrator-route]] / [[decisions/acceptance-guardrails]]
