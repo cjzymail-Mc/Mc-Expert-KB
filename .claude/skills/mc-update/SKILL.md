@@ -30,6 +30,14 @@ description: 任务完成后的文档更新流程——判断要不要固化记�
 
 **列出候选文件，按重要性排序展示，等用户挑选。** 不要直接动手。
 
+候选清单含两类（并排展示，用户一次挑全）：
+
+1. **本会话可固化经验**（经第 0 步两道闸筛过的）。
+2. **Codex inbox proposal**（如本 repo 存在 `.codex/memory-inbox/` 目录）：扫该目录下 `status: proposed` 且 `review: pending` 的文件，逐条列 `title` + `applicability` + `destination_candidate` + 证据摘要。
+   - **静默 skip**：目录不存在 → 整类跳过、不报错、不打印（多数纯 Claude repo 无此目录）。**三种零候选情况同样静默**（不打印任何"0 条/无候选"提示）：目录存在但为空 / 目录存在但无 `status: proposed + review: pending` 文件 / 整类跳过。**只有列到 ≥1 条候选时，候选清单才出现 inbox lane 标题**（零候选 = 零噪声）。
+   - **`review: deferred` 不列**：deferred 是 `$today` 全托管 finalizer 产的、设计为攒批后审，不在本 lane 即时处理（见 today SKILL.md finalizer 段）；硬塞进 interactive 审会绕过 batch 语义。
+   - **用相对路径**扫 `.codex/memory-inbox/`（`/mc-update` 在哪个 repo 跑就扫哪个 repo 的），禁硬编码任何 repo 私料绝对路径。
+
 ## 第 2 步：归属判断
 
 **memory 归属**（核心问句：没这条知识，新会话前 2-3 回复会出错吗？）：
@@ -38,6 +46,9 @@ description: 任务完成后的文档更新流程——判断要不要固化记�
 |--|--|--|
 | ✅ 用户偏好 / 跨主题元规则 / 高频反射 | auto-memory | `.claude/auto-memory/` |
 | ❌ 特定任务 / 技术细节 / 一次性踩坑 / 架构档案 | memory | `.claude/memory/` |
+| 🔧 skill-bound 经验（随某 skill 走、任意 repo 用该 skill 都适用） | user-scope skill | 随该 skill 沉淀（SKILL.md / skill 级 memory），**不塞 repo 级 memory**（换 repo 加载不到） |
+
+> **skill 层判定**：经验是否"绑在某个 skill 上、跨 repo 用该 skill 时都该浮现"？是 → 随 skill（user-scope，junction 跨账号生效），别塞 repo 级 memory（换 repo 就丢）。源 2026-07-09 Hot-Fix：GLM-vision 经验错塞 auto-memory，用户点破"memory 是 repo 级、我可能在任意 repo 用该 skill"（reflect 续30 签字 #2）。
 
 **改动归属**：
 
@@ -66,7 +77,17 @@ description: 任务完成后的文档更新流程——判断要不要固化记�
        - `mc-plan/` — **仅** plan md（main-plan、sub-plan-NN-xxx），不放脚本/台账/产物
        - `mc-progress/` — 执行产物（脚本、台账 xlsx、模板等），备份在 `mc-progress/backups/`
        - `mc-debug/` — 架构讨论 / 计划制定 / 复盘类 md
-5. 挪/删文件后，grep dangling 引用并修复（凝固态档案除外：`*debug*` / `*plan*` / `fix*` 不回溯篡改；CLAUDE.md 末尾如已加重定向锚点则为旧 §引用兜底）
+5. 挪/删文件后，grep dangling 引用并修复（凝固态档案除外：`*debug*` / `*plan*` / `*fix*` 不回溯篡改；CLAUDE.md 末尾如已加重定向锚点则为旧 §引用兜底）
+6. **inbox proposal 回写**（仅当第 1 步挑了 Codex inbox proposal 时）：
+   - 用户批准某 proposal → 先回写 inbox 源文件：`status: accepted` + `reviewer: <用户>` + `accepted_at: YYYY-MM-DD`。
+   - 按该 proposal 的 `applicability` 走第 2 步路由表 apply（写目的地 memory + 更新 MEMORY 索引，与普通候选同流程）。
+   - 写目的地成功后，回写 inbox 源文件追加：`applied_at: YYYY-MM-DD` + `destination: <实际写入路径>`。
+   - 用户拒绝 → 回写 `status: rejected` + `reviewer` + `rejected_at`。
+   - **防悬挂兜底**：第 3 步末尾 grep `.codex/memory-inbox/` 里 `status: accepted` 但缺 `applied_at` 的文件 = 悬挂清单，列进本流程报告交用户人工裁决（重试 apply / 手动 mark rejected / 手动 apply）。skill 流程中途可能被打断（compact / 用户打断 / 写目的地失败），这是"分两次写 + 末尾 grep 列悬挂清单"，**不做强一致性保证**。
+     - **排除 legacy inline 格式**：`status: accepted # 已路由并入 X`（行尾带 `#` 注释的老文件）是 legacy 已应用、只是没字段化 `applied_at`，**不算悬挂、不列入报告**。悬挂判定 = `status: accepted` 且**无** `applied_at` 且 status 行**无** `#` 注释。（fixture 验证发现：不排除 legacy 会让 3 条 legacy 误报污染悬挂清单。）
+   - **不自动重试**：已 `status: accepted` 的 proposal **不再列入第 1 步候选**（即便缺 applied_at）；悬挂的恢复靠 grep 报告 → 用户人工裁决，skill **不自动重试 apply**（自动重试 = 弱一致性引擎语义，撞 main-plan §4 禁区 1/2）。
+   - **legacy accepted 不回填**：已有 inline 注释格式（`status: accepted # 已路由并入 X`）的老文件保留作 audit，不补 `applied_at`/`destination` 字段（protocol §52 不批量重写历史）。字段化记录只对本次起新 review 的 proposal 生效。
+   - inbox 源文件 apply 后**原地保留**（作 audit 记录，protocol 第 4 条要求），不删不移。
 
 ## 反例
 
@@ -80,3 +101,6 @@ description: 任务完成后的文档更新流程——判断要不要固化记�
 - ❌ 新建顶级目录或文件类型，但忘改 CLAUDE.md 文件结构图（下次会话拿到过时的项目地图）
 - ❌ 把 "如有 CLAUDE.md 指针就更新" 误读为 "没有就跳过"（实际：常常是该新增一条）
 - ❌ 把 changelog 行写进 CLAUDE.md（契约层不维护变更日志 → 写到 STATE.md 变更日志）
+- ❌ 给 inbox 回写加"两阶段保证一致性"的强语义（如：要么都成功要么都撤销 / 一条 proposal 只能 apply 一次的硬保证）—— 撞 main-plan §4 禁区 2（promotion tool 强保证）；本 lane 是"分两次写 + 末尾 grep 列悬挂清单交用户"，**不做强保证、靠人工兜底**，不是强一致性流程
+- ❌ inbox accepted 未 applied 的悬挂 proposal 自动重试 apply（自动重试 = 弱一致性引擎语义，撞 main-plan §4 禁区 1/2；应靠末尾 grep 报告交用户人工裁决）
+- ❌ `/mc-update` 在没有 `.codex/memory-inbox/` 的 repo 报"扫不到目录"噪声（应静默 skip）；目录存在但无 pending proposed 也静默（零候选 = 零噪声）
