@@ -27,6 +27,17 @@
 
 原档：`Mc-emoji/[feature-02-auto-Enter]/plan-权限守卫升级-2026-07-03.md`（3 subagent 调研全汇总 + guard-delete L3 四闸实现；实现细节留源 repo）。
 
+## 2026-07-19 补：`auto` mode 与显式 `ask` 规则的优先级
+
+> ⚠️ 核实 2026-07-19 · 官方 permission-modes 文档 + 本机 4 探针矩阵实测（CLI v2.1.207）。版本敏感、易过期。
+
+- **显式 `ask` 规则压过 `auto` mode 放行**（官网原文 "Explicit ask rules still force a prompt"）：即使切到 `auto` mode 且其后台分类器想放行，`settings.local.json` 里 `ask: ["Bash(rm *)"]` 这类**显式规则仍强制弹框**。→ **rm 弹框的根因是 ask 规则，不是 auto 没激活**——别误判"rm 弹框 = auto 没激活 / 模型不支持 auto"，那是错诊断方向。
+  - 实测 4 探针矩阵坐实（glm-5.2 + auto on）：`rm -f`/`rmdir`（在 ask 列表）→ 弹框；`mkdir`/`Write 新文件`（不在 ask 列表）→ **静默通过**。后者证明 auto mode **确实激活**（非 default/manual 模式），前者证明 ask 压过 auto。
+- **第三方模型（如 glm-5.2）下 auto mode 实测可用**（官网 auto mode 模型清单只列 Claude 系列 Opus 4.6+/Sonnet 4.6+/Fable 5，glm-5.2 未列但实测激活）——这是对官网门槛的**实证扩展**（官网未覆盖第三方模型）。但**降为参考备注**：单点实测、可能随版本/模型变化，不外推为"所有第三方模型都支持 auto"。
+- **要真让 auto 分类器接管 rm 判断**（而非 ask 门一视同仁弹框）= 从 `ask` 移除 `Bash(rm *)` → 让 auto 语义判断（官网承诺拦 glob rm / 会话前文件 / 递归变量删除、放行会话内具名产物）。但有**两个未验证风险**别贸然移除 ask 门：① auto 分类器是概率判断（非确定保证）；② auto 对第三方模型 rm 的分类是否生效未测（只测了非删除类命令静默）。现实路径 = **保留 ask 门作 rm 硬底线**，auto mode 留作减扰非删除类命令 + 未来验证后才评估移除 ask。
+
+原档：`Mc-emoji/X-顽疾复盘-B模式中途rm反复犯-2026-07-19.md` §7（4 探针矩阵 + 官网原文）。auto mode 版本门槛细节（v2.1.142+ defaultMode 必须放 user settings / 模型清单 / fallback 阈值）留源 repo。
+
 ## 详细背景
 `Mc-emoji/[feature-02-auto-Enter]/bypass-plan-discussion.md` + `settings-fix-plan.md`（给其他项目 Claude 改 settings 的指令文档）。
 
