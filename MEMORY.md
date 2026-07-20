@@ -23,8 +23,9 @@
 - [agent-teams](references/agent-teams.md) — Agent Teams 机制核实（2026-06-01，易过期）：teammate 可引 project-scope agent（mc-expert 无需转 user 级）+ mailbox/task list 自动对话 + Windows 走 in-process + **solo vs 冷启动 team 判据 / 关键门派 mc-expert 陪审（2026-06）** + **idle-零正文：故障模型+兜底单一权威节（2026-06-18 实证）——显式 SendMessage 必要不充分（in-process 投递 flaky + 疑似 session 截断）、有产物角色落盘承重；旧 Q8「显式即解决/不需落盘」已订正为指针**
 - [acceptance-ladder](references/acceptance-ladder.md) — 批量产线验收 = 五级首件递进阶梯（映射→内容→渲染→项目级→批量抽检；首件挑最难样本）〔Agent-4，2026-06-12〕
 - [task-decomposition](references/task-decomposition.md) — 长链任务交底协议（信息三层 / 两段合同 plan 批准制 / 盘点先行+追问义务+拍板点封闭化 / 纠输入不纠输出）〔Agent-4，2026-06-10〕
-- [loops-and-automation](references/loops-and-automation.md) — CC 自动化/Loops 架构（loop↔skill 正交 / 复用单位是 skill 非 agent / 五件套 / 台账=程序计数器 / 续命≠触发 / 原生优先 orchestrator 最后手段 / 写操作不无人值守）〔Mc-emoji 思考6，2026-06-12〕
+- [loops-and-automation](references/loops-and-automation.md) — CC 自动化/Loops 架构（loop↔skill 正交 / 复用单位是 skill 非 agent / 五件套 / 台账=程序计数器 / 续命≠触发 / 原生优先 orchestrator 最后手段 / 写操作不无人值守 / **§5 触发三轴含 `/goal` Stop-hook 续轮(续轮器≠验收器) + §7 判轴别用错 cross-link autopilot，2026-07-19 易过期**）〔Mc-emoji 思考6，2026-06-12〕
 - [cc-hooks-facts](references/cc-hooks-facts.md) — CC hook 机制事实（StopFailure=observ-only 交互式续不了/真续走 headless `--fallback-model` / UserPromptSubmit exit-2=全局变砖 landmine→launcher 防砖 / stdout 恒空 / settings 不热重载但脚本即时 / **07-03 补权限决策类 hook 拦截语义**：deny 拦 bypass·只收紧不放松·fail-open→exit2·覆写守卫范式）〔核 2026-07-02/07-03, CLI v2.1.193/159, 易过期〕
+- [cc-command-skill-resolution](references/cc-command-skill-resolution.md) — CC command/skill 同名解析（同名时 `/slash` 直达 skill、command 壳成死代码；升级删壳或错开命名 chop→chop-task；today 升 skill 实测推翻「留壳必要」陪审判断）〔Mc-emoji 2026-07-12，易过期〕
 
 ## agents/ — KB 自带 subagent
 - [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 只读规划、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
@@ -99,16 +100,37 @@
 - ⏸ **任务2 hook 改动不入 KB**（domain 实施细节 + glm 账号状态变更，非跨 repo 普适经验）：capture_launcher 注释 3→4 账号（机制已在 cc-hooks-facts）/ guard-overwrite 保护清单硬编码→通配 `*\.claude*\` 覆盖 4 账号（已在 .ps1 注释自解释 + cc-hooks-facts 有守卫范式指针）/ stopfailure 撤销 glm 排除门（glm 部署决策；cc-hooks-facts 的"observ-only 机制事实"不变、无需订正）。**留痕建议**：glm 门撤销如要记，更新 Mc-emoji inbox `stopfailure-hook-fix`（非 KB 内容层）。
 - 未提交：用户手工 push。
 
+## 2026-07-14 收割轮（主动巡检 · 四路扫描）
+
+> 主动巡检：Mc-emoji(07-07后) / Wu Prj(06-26后) / Agent-3·3rd-ppt(06-02后) / Hot-Fix(侦察) 四路，3 read-only agent + 主 Claude 扫 Hot-Fix。Mc-emoji 主料=feature-06-codex-workshop(domain)，Wu Prj 主料=deck/chart 产线域(domain)，Agent-3·3rd-ppt 确认无新料，Hot-Fix=暂存盘(重构repo-for-codex 是 Claude/Codex 共享 FAB 探索、plan07 多方案未收敛)。
+
+- ✅ **① reflexes append「Grep 工具默认跳 hidden 目录」**：ripgrep 跳 `.`开头目录+尊重 .gitignore，下阴性结论前须显式指定 path / `rg --hidden`（`--no-ignore` 只绕 gitignore 不绕 hidden）。**「即使想核实工具也会骗你」= verify-before-asserting/阳性对照的工具层补丁**。源 Mc-emoji plan06 07-12 两次翻车。
+- ✅ **② references 新建 `cc-command-skill-resolution`**：同名 command+skill 时 /slash 直达 skill、壳成死代码；升级删壳或错开命名(chop→chop-task)；today 升 skill 实测推翻 mc-expert 陪审 Q4「留壳必要」。CC 机制族(cc-permissions/cc-hooks-facts 同族)，标易过期。
+- ✅ **③ agent-teams append「单发 subagent 掉线重试预算 max1-then-degrade」**：非 team 的一次性 spawn 陪审/补审 subagent 返回 Connection closed/零正文 = 同根 in-process 投递 flaky → 最多重试1次再降级(冷启动 general-purpose 补审/pending 交用户)，别连试≥2 空耗。idle-零正文权威节的单发分支补丁。源 Wu Prj 06-29 连掉3次空耗1/3任务。
+- ⏸ **不入/留管道**：④ autopilot 边界(概率裁判reviewer≠确定性后置，与 self-compliance-probabilistic 重叠、落点需陪审) / ⑤ 陪审分两道·价值不对称(实例偏deck域) / ⑥ 主线漂移(已pin feature-05，留/reflect) / ⑦ C2 skill经验勿塞repo memory(尚在fuel、单repo) / ⑧ H1 FAB多AI共享repo方法论(mc-expert 07-13已裁定暂不入库：单用例+未实测+plan07/FAB多方案未收敛)。
+- ⏸ **域内/已覆盖不入**：Mc-emoji codex实验domain(plan07-13/.ai/中立控制面/过度工程=已被「少做」覆盖) / Wu Prj deck-chart域技法 / Agent-3·3rd-ppt四月旧文07-01重触碰 / 账号配置/项目状态。
+- 未提交：用户手工 push。
+
+## 2026-07-19 收割轮（Mc-emoji · 手上有候选，非全量巡检）
+
+> 来源 = Mc-emoji 本会话 temp.md 提案（claude-glm harness 核实 today-loop-for-claude 议题一手产出 + mc-expert 陪审）。feature-05 plan11（2026-07-16）早坐实同结论，但 KB 中央层未吸收，仍补。单点实测（claude-glm 单 provider/单探针）→ 写入标降级 + 易过期，plan11 不依赖路径（易搬移）。
+
+- ✅ **A `loops-and-automation` §5 补第三条触发轴**：原只有「手动 / `/loop` 自动」两条 → 升级成三条（手动 / `/loop` 时间驱动 / **`/goal` 事件驱动 Stop-hook 续轮**）。4 个关键区分：①本质=session 级 prompt-based Stop hook（官方文档+本机"两 turn 强制接力"探针双坐实）②只续单 session、跨 session 靠状态台账（区别 Codex Goal 的 sqlite 持久）③**续轮器≠验收器**（evaluator 只看对话不读文件不跑测试，业务 PASS 须确定性自检+陪审先浮证据）④风险=条件未满足会"压过当 turn 指令"强续（today-loop 须加"前置门通过 AND 无 awaiting_human"谓词）。标易过期 + 2026-07-19/CLI v2.1.207。
+- ✅ **B `loops-and-automation` §7 显式 cross-link 判轴**：在「Pro OAuth 跑不了无人值守定时」后加「判轴别用错」——「无人值守」是规范/环境轴，不是「自主流程中途权限后置」判轴（见 [[decisions/autopilot-defer-perm-to-human-gate]]，判据轴=是否 B 自主流程中途）。点明 today-loop 评估曾误用"无人值守→NOT_IN_SCOPE"推翻本可做需求。
+- ⏸ **提案 3 不入**：新建 decision 卡 `goal-is-turn-relay-not-cross-session`——机制事实已进 references（提案 A），「today-loop 怎么用 /goal / 跨 plan 接力区分两段」是项目专属留 feature-05（呼应普适 vs 项目专属判据，[[decisions/kb-memory-boundary]]/06-26 收割）。
+- ⏸ **不顺带处理游离判据 md**：`references/today完整版loop判据.md`（及引用的 `收尾loop判据.md`）= git 未跟踪中文文件名草稿，不在巡检台账已入清单，本轮只补已入库 `loops-and-automation.md`，纳入与否另开轮次（防 scope 蔓延）。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
 
 | 源 repo | 扫描截止(基线) | 上次巡检 | 本轮结论摘要 |
 |---|---|---|---|
-| `3rd-ppt-prj` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖（含孤儿审计）；过程文件≤05-29，无新增可入 |
-| `[Agent-3] Info Classifier` | 2026-06-02 | 2026-06-15 | Stage 0 已深挖；过程文件≤06-02，无新增可入 |
-| `[Agent-4] Wu Prj` | 2026-06-26 | 2026-06-26 | 富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
-| `Mc-emoji` | 2026-07-07 | 2026-07-07 | **07-03 收权限守卫升级 + reflect 签字桌**：A1 cc-permissions 官方补强(Windows无沙箱/受保护路径V1实测/模式辨别/CVE) / A2 cc-hooks-facts 补权限决策类 hook 拦截语义(deny拦bypass/fail-open→exit2/覆写守卫) / B reflexes 扳机①补交付宣称 / C loops §7 补 Pro OAuth 不能无人值守→须API Key / D principles 补双层呈现。已否：commit-push-at-milestone / deploy-guard换机runbook / headless-probe / 思考9源chat / guard四闸实现细节。〔历史〕**07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
+| `3rd-ppt-prj` | 2026-07-14 | 2026-07-14 | Stage 0 已深挖；**07-14 复扫**仅 STATE 06-02 触碰(噪声)，过程文件≤06-02，确认无新料 |
+| `[Agent-3 Claude+Codex] Info Classifier` | 2026-07-14 | 2026-07-14 | Stage 0 已深挖；**07-14 复扫**：07-01 一簇 feature/skill/产物重触碰(域内)，无新 auto-memory(32个全≤05-25)，唯一方法论=4月旧文07-01重触碰已覆盖。确认无新料 |
+| `[Agent-4] Wu Prj` | 2026-07-14 | 2026-07-14 | **07-14 复扫**：新增集中 deck/chart 产线域(域内不入)，收单发subagent掉线重试max1(append agent-teams)；已否 deck技法/体裁包/换皮护栏/指针委托脱节(重申06-26 C5)。〔历史〕富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
+| `Mc-emoji` | 2026-07-19 | 2026-07-19 | **07-19 收**：手上有候选(本会话 temp.md 提案，非全量巡检)——①loops §5 补第三条触发轴 `/goal` 事件驱动(Stop-hook 续轮，session 级/只续单 session 不跨 session/续轮器≠验收器 evaluator 不读文件/风险=条件未满足会压过当 turn 指令强续)+②loops §7 显式 cross-link「无人值守轴≠自主流程中途判轴」(实测 today-loop 评估曾误用无人值守轴推翻需求)；提案3 新 decision 卡 `goal-is-turn-relay-not-cross-session` **不入**(机制事实已进 references、today-loop 怎么用属项目专属)。单点实测标降级(claude-glm 单 provider/单探针)+易过期；plan11(项目档案)不依赖路径。**07-14 复扫**：主料 feature-06-codex-workshop(domain)；收①Grep跳hidden盲区(reflexes)+②CC同名解析(references新建)，留/reflect 主线漂移，不入 codex实验domain(plan07-13/.ai/)/④autopilot边界(与self-compliance重叠)/⑤陪审分两道(deck域)/C2/H1。〔历史〕**07-03 收权限守卫升级 + reflect 签字桌**：A1 cc-permissions 官方补强(Windows无沙箱/受保护路径V1实测/模式辨别/CVE) / A2 cc-hooks-facts 补权限决策类 hook 拦截语义(deny拦bypass/fail-open→exit2/覆写守卫) / B reflexes 扳机①补交付宣称 / C loops §7 补 Pro OAuth 不能无人值守→须API Key / D principles 补双层呈现。已否：commit-push-at-milestone / deploy-guard换机runbook / headless-probe / 思考9源chat / guard四闸实现细节。〔历史〕**07-02 收 feature-05 富矿**：cc-hooks-facts(待入候选 StopFailure/API 已开发完→收，+UserPromptSubmit exit-2 landmine) / reflexes 扩「先查再下结论」泛化+阳性对照 / principles 推广备份 / task-decomposition 机械词触发 / self-compliance-probabilistic 收尾。已否：capture-wordlist / wuprj-loops-never-ran / junctions基建 / chartjs-deck域 / stopfailure-hook-fix实现细节 / reserve_annotation_block / l4-fuel / user-language。〔历史〕已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 
 ## Stage 1 状态

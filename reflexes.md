@@ -39,8 +39,10 @@
 ## 环境/工具
 
 - **PowerShell 含 `[]` 路径必须 `-LiteralPath`**：本项目所有 feature 在 `[featureNN-...]` 下，FS cmdlet 默认加 `-LiteralPath`，否则 `[]` 被当通配符报错。〔Agent-3 + 本次实测复现〕
+- **Glob/Grep pattern 里 `[` 是字符类语法**：带方括号的目录/文件名（如 `[feature-06-codex-workshop]`）直接写进 Glob/Grep 的 pattern（如 `[feature-06-codex-workshop]/output/**`）→ `[` 被当字符类、**静默返回空**（No files found，不报错）→ 极易误判"文件不存在 / dead code / 无调用方"。绕开：用更宽 glob（`feature-06-*/output/**`）或 ripgrep `--glob` 字面匹配；shell 里 `[[]` 转义易错别用。**与上一条 `-LiteralPath` 是兄弟**：方括号在 PowerShell 路径参数（FS cmdlet，漏了报错）和 Glob/Grep pattern（静默返空）里都是特殊语法，两处都要防——后者更阴，返空不报错易喂假阴性（同 Grep 默认跳 hidden 的工具盲区）。〔Mc-emoji，2026-07-13：重犯"无数次"，reflect 续30 签字 #1〕
 - **改 settings/配置先 .bak**；权限用方案 A，不主动开 bypassPermissions。〔Mc-emoji〕
 - **Git Bash 里 `python3` 是 WindowsApps stub，exit 49 静默失败**（不报错、无输出）——跑脚本/校验一律用 `python`；原生 python 不认 `/tmp`，临时文件走 Windows 路径（`tempfile.gettempdir()`）。〔Agent-4〕
 - **user-scope junction 路径是跨 repo 共享契约**：`~/.claude/` 下 commands/skills/agents 的脚本经 junction 给所有源 repo/账号共享（`$env:USERPROFILE\.claude\...` 借同一份物理文件，一处改处处见效——红利与代价同源）；**改其位置 / 删 / 改名前，grep 必须含所有源 repo**（不只扫当前 repo 或母本 repo），否则漏掉借用者、挪了断跨 repo 调用。〔Mc-emoji feature-06 plan05，2026-07-12：autopilot_failcount.ps1 被 Wu Prj sub-plan-16 跨 repo 硬编码调用，险当 today 私有挪走，幸 mc-expert 跨 repo 扫到〕
+- **Grep 工具默认跳 hidden 目录**：ripgrep（Grep 工具底层）默认跳过 `.` 开头目录（`.claude/`·`.agents/`·`.codex/`·`auto-memory/`）**且**尊重 `.gitignore`——两者叠加 = 全 repo grep 时这些配置/契约目录被完全跳过。下「无引用 / 无调用方 / 没人用」这类**阴性结论前**，必须显式指定 path（`.agents/skills` 等）或 Bash `rg --hidden`（`--no-ignore` 只绕 `.gitignore`、**不绕 hidden 跳过**；Grep 工具未暴露 `--hidden`）。**即使你想核实，工具盲区也会骗你**——这是「先查再下结论 / 阳性对照」的工具层补丁。〔Mc-emoji feature-06 plan06，2026-07-12：两次同型翻车（adapter 引用 / failcount 死代码 险误判）〕
 
 相关：偏好底座 [[principles]]；架构决策 [[decisions/orchestrator-route]] / [[decisions/acceptance-guardrails]]

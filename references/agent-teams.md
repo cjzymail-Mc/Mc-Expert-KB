@@ -42,6 +42,7 @@
 - **有 Write 的角色(coder)**：有产物的里程碑**报告先写盘 + `SendMessage` 只发一行指针，承重靠盘**（SendMessage 漏发/只到 idle，lead 也能读文件兜底）；逼近 session 限额先落 partial 进度。
 - **只读角色(planner/mc-expert，无 Write)**：仍显式 `SendMessage` 发全文（同 session 几 KB~几十 KB 实测逐字到达、可靠），不需落盘。
 - **lead 兜底**：产物/报告已落盘的节点**默认直接读文件验收**，正文连等 ≤2 轮询拿不到就自核产物（Bash/zipfile 实扫），别反复 nudge（递减回报）。
+- **单发 subagent（非 team）掉线 = 同根 flaky，重试预算 max 1 then degrade**：一次性 spawn 的陪审/补审 subagent（mc-expert 等）返回「`Connection closed mid-response` / 中途断 / 零正文 / 0 tool_uses」= 同根 in-process 投递 flaky（非方案错、非 agent 错）→ **最多重试 1 次**，再失败**降级**（改冷启动 `general-purpose` 补审 / 或落「pending 交用户」），**别原地连试 ≥2 次**（纯空耗）；该门要点已被其它确定性证据覆盖时，掉线后降级零损失。〔Wu Prj 2026-06-29：现场评审 chart 增量，最终陪审连掉 3 次空耗 ~1/3 任务时间〕
 - **选型治本**：单点串行流水线该 solo 不该上 team（执行体隔 flaky mailbox 汇报是自找失败面），见下「solo vs 冷启动 team」节。
 
 > 落点：`~/.claude/agents/coder.md`「里程碑汇报协议」+ `team-task` SKILL.md「长正文回传 / 里程碑汇报」节已据本节落地；旧诊断（mc-debug07 grok 版 / 旧 Q8）一律指向本节。
