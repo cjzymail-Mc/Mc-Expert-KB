@@ -1,0 +1,8 @@
+interface:
+  display_name: "Today"
+  short_description: "执行一个 plan，支持 Goal 全托管与安全收尾"
+  default_prompt: "Use $today to execute the current plan with the repo runtime contract."
+
+policy:
+  allow_implicit_invocation: false
+

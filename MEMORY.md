@@ -20,7 +20,7 @@
 - [dual-tool-single-source](decisions/dual-tool-single-source.md) — Claude/Codex 双工具：知识层（角色/skill/runbook/memory）**单一真源**，两工具各配 ~5 行薄 shim 指向真源；机制差异（auto-memory vs hooks/sandbox）= 入口适配非两套知识。「两套 skill」是伪命题（5 角色 shim 字节级一致）。2026-07-18 冻结 + today-loop PASS
 
 ## references/ — 事实手册
-- [cc-permissions](references/cc-permissions.md) — Claude Code 权限系统实测事实（方案 A + 6 反直觉事实 + **07-03 官方补强**：deny→ask→allow 官方确认/Windows 无沙箱→方案A唯一正解/受保护路径V1/模式辨别/CVE 黑名单必被绕 + **07-19 补**：显式 `ask` 规则压过 `auto` mode 放行→rm 弹框根因是 ask 非 auto 没激活/第三方模型 glm-5.2 auto 实测可用[参考备注]）
+- [cc-permissions](references/cc-permissions.md) — Claude Code 权限系统实测事实（方案 A + 6 反直觉事实 + **07-03 官方补强**：deny→ask→allow 官方确认/Windows 无沙箱→方案A唯一正解/受保护路径V1/模式辨别/CVE 黑名单必被绕 + **07-19 补**：显式 `ask` 规则压过 `auto` mode 放行→rm 弹框根因是 ask 非 auto 没激活 + **07-23 订正**：glm-5.2 auto「实测可用」证据不足降为存疑/删 guard 主论证改为概率不替代确定性兜底）
 - [agent-teams](references/agent-teams.md) — Agent Teams 机制核实（2026-06-01，易过期）：teammate 可引 project-scope agent（mc-expert 无需转 user 级）+ mailbox/task list 自动对话 + Windows 走 in-process + **solo vs 冷启动 team 判据 / 关键门派 mc-expert 陪审（2026-06）** + **idle-零正文：故障模型+兜底单一权威节（2026-06-18 实证）——显式 SendMessage 必要不充分（in-process 投递 flaky + 疑似 session 截断）、有产物角色落盘承重；旧 Q8「显式即解决/不需落盘」已订正为指针**
 - [acceptance-ladder](references/acceptance-ladder.md) — 批量产线验收 = 五级首件递进阶梯（映射→内容→渲染→项目级→批量抽检；首件挑最难样本）〔Agent-4，2026-06-12〕
 - [task-decomposition](references/task-decomposition.md) — 长链任务交底协议（信息三层 / 两段合同 plan 批准制 / 盘点先行+追问义务+拍板点封闭化 / 纠输入不纠输出）〔Agent-4，2026-06-10〕
@@ -136,16 +136,27 @@
 - **Codex 机制板块判断**：T3/T4/T5/T6/T8 同属"Codex 端机制事实"，KB 现定位偏 Claude-centric。用户本轮未收 = 暂不系统性补 Codex 对照面；若未来 KB 定位转"双工具"，这批可批量收（届时 T2 已铺好 memory 差异基础）。
 - 未提交：用户手工 push。
 
+## 2026-07-23 收割轮（本 repo inbox 3 条 + KB-update 命令修正）
+
+> **修命令在先**：跑 /KB-update 时主 Claude 第一反应去扫源 repo，漏了**本 repo 自己的 `.claude/auto-memory/` inbox**（待审收件箱才是巡检第一站）。用户当场点破 → 修 `.claude/commands/KB-update.md` 前置步：step 1 改成「先扫本 repo inbox」、补纪律「inbox 里凡还没晋升的本轮都要重新过闸门、别只看新不新」、源 repo 扫描降为 inbox 之后的补充。然后才按新 step 1 处理 inbox 3 条。
+
+- ✅ **C1 `cc-permissions` §6 glm-5.2 auto 证据强度订正**（就地改写，hits 第 8 步「references 实证推翻就订正」）：原 07-19 写「glm-5.2 实测可用[参考备注]」是探针不锋利的过度断言——mkdir/Write 静默在方案 A 全 allow 配置下本就该静默、**无法区分 allow 放行 vs auto 放行**（阴性结论没做阳性对照，违 reflexes）；rm 判断生效未测；官网白名单不覆盖第三方（不证伪）。两边都不能一锤定音 → 订正为「证据不足」。**删 guard 主论证改为不依赖「glm 不支持 auto」**：即使 auto 激活、对 glm rm 判断未测 = 概率分类器不替代确定性兜底（链 self-compliance-probabilistic）。源 = 原 inbox `cc-permissions-glm-auto-evidence-insufficient.md`（07-20/21，mc-expert 陪审高置信；晋升后已删，正文见 cc-permissions §6）。
+- ✅ **C2 `reflexes` 追加第 5 类扳机「治标优先于重构」**：用户因工具行为打扰而问「要不要重构/删守卫/换机制」= 停，先问治标能不能解眼前痛；只有治标失败或用户明示要重构才进架构评估。「别打扰我」是症状诉求、非拆安全网授权。实例 2026-07-20 B 模式被弹窗打扰问该不该删 guard。**诚实标注单 repo 起源、待第二 repo 命中**（不满足 reflexes 双 repo 严格判据，但跨 repo 普适交互模式 + 与现有四扳机同套路）。源 = 原 inbox `reflex-candidate-治标优先于重构.md`（07-21，mc-expert 陪审提炼；晋升后已删，正文见 reflexes 扳机簇）。
+- ✅ **C3 `principles` 交互风格追加「人工门最小化 / 倾向深度授权」**（用户核心取向，原话）：人工门越少越好（盯屏太累）、默认倾向自主推进、攒到里程碑再找用户、未来常用 B 模式。守门判据=「防不可逆事故」还是「增加摩擦求稳」；4 红线人工门仍保留（链 autopilot-defer-perm-to-human-gate）。与文档诚实「不确定停下来商量」不冲突（兜底 vs 默认推进方向）。**落 principles 非 reflexes**：用户取向非机械反射、单 repo 表述。源 = 原 inbox `reflex-candidate-人工门最小化倾向深度授权.md`（07-23，用户明确表述；晋升后已删，正文见 principles 交互风格节）。
+- ⏸ **today完整版loop判据.md 继续 defer**（07-19 已 defer）：git 未跟踪中文草稿、不在巡检台账已入清单，本轮主线 inbox 3 条，防 scope 蔓延。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
 
 | 源 repo | 扫描截止(基线) | 上次巡检 | 本轮结论摘要 |
 |---|---|---|---|
+| **本 repo inbox**（`.claude/auto-memory/`） | 2026-07-23 | 2026-07-23 | **07-23 首登**：本轮暴露巡检第一站应是本 repo inbox（非源 repo）→ 已修 KB-update 命令 step 1。扫出 3 条待晋升候选全收：C1(glm-5.2 auto 证据订正/cc-permissions)+C2(治标优先于重构/reflexes)+C3(人工门最小化/principles)。已晋升候选已从 inbox 删除（晋升后留 inbox = 双份漂移，违 kb-memory-boundary 物理隔离）；inbox 仅留 `feedback_ppt_selfcheck` 旧料未动。**纪律**：inbox 里凡还没晋升的每轮都要重新过闸门、别只看新不新 |
 | `3rd-ppt-prj` | 2026-07-14 | 2026-07-20 | Stage 0 已深挖；**07-20 复扫**：晚于 07-14 仅 `.git/FETCH_HEAD`(元数据)，过程文件≤06-16，确认无新料。〔历史〕**07-14 复扫**仅 STATE 06-02 触碰(噪声)，过程文件≤06-02 |
 | `[Agent-3 Claude+Codex] Info Classifier` | 2026-07-20 | 2026-07-20 | **07-20 富矿**：07-15~20 双主线=①Codex 端机制适配(hooks/sandbox/auto_review/视觉子进程)②双工具单一真源+project-archive-starter 重建治理。收 T1(单一真源决策)+T7(视觉防幻觉,落 principles)。已否域内(染色/槽位/mapping/移植技法)。**07-14 复扫**(历史)：07-01 一簇 feature/skill 重触碰(域内)，无新 auto-memory，确认无新料 |
 | `[Agent-4] Wu Prj` | 2026-07-14 | 2026-07-20 | **07-20 复扫**：晚于 07-14 的文件=**0 个**（最新停 07-01 的 `.lock`，过程文件全 ≤06-30）。⚠️ **基线滞后提示**：07-14 基线切在该 repo 沉默期之后，06-29/06-30 最后一批 feedback（marker_prefix / deck_split_browextract / keygate_mc_expert_jury）按时间窗本应在更早轮覆盖——若日后怀疑漏收，可回查 06-28~06-30 窗口。本轮无新增可入。**07-14 复扫**(历史)：新增集中 deck/chart 产线域(域内不入)，收单发subagent掉线重试max1(append agent-teams)；〔历史〕富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
-| `Mc-emoji` | 2026-07-20 | 2026-07-20 | **07-20 收**：主动巡检(07-19后)。主料=feature-06 闭口(07-19)+feature-07 codex-memory 路由升级(07-20)，Claude/Codex 双工具机制对照大爆发。收 T2(claude-codex-memory-difference 新建 reference)+T9(cc-permissions 补 auto vs ask 优先级)+T12(kb-memory-boundary 补两段式，源 temp.md 07-20 事故复盘)。已否：候选5 Codex过度工程(单repo)·6追加式产物目录(工程范式)·7 B模式rm(KB decision已覆盖)·10 auto_review(borderline)·11 today-loop Codex独占(项目特定)·12 mc-update路由(skill内部)·13 codex路由评估(项目进度)·8视觉子进程机制层(方法论层已收T7)·3 /goal MSYS坑(borderline,续轮主料已覆盖)。〔历史〕**07-19 收**：temp.md 提案——loops §5 补第三触发轴 `/goal`(Stop-hook 续轮/续轮器≠验收器)+§7 cross-link 判轴。〔历史〕**07-14 复扫**：收①Grep跳hidden(reflexes)+②CC同名解析(references)。〔历史〕07-03 收权限守卫升级+reflect签字桌；07-02 收 feature-05 富矿。已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试(06-26,源在此)。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
+| `Mc-emoji` | 2026-07-23 | 2026-07-23 | **07-23 复扫**：本轮 3 条候选(C1/C2/C3)原档均标 Mc-emoji 源(07-20~23 /reflect 会话 + feature-07)，但**候选已先落本 repo inbox**、经 inbox 路径晋升(见上"本 repo inbox"行)，故 Mc-emoji 源 repo 本轮不再单独深扫——inbox 已是这些料的中转站。**07-20 收**(历史)：主料=feature-06 闭口+feature-07 codex-memory 路由，双工具机制对照大爆发。收 T2/T9/T12。已否：候选5/6/7/10/11/12/13/8/3。〔历史〕07-19 收 loops §5/§7；07-14 收 Grep跳hidden+CC同名解析；07-03 权限守卫升级+reflect签字桌；07-02 feature-05 富矿。已入：loops-and-automation / orchestrator-route分层 / mc-expert路径订正 / 普适vs项目专属测试。已否：F4 Reviewer别造轮子 / reviewer-scope / prefer-autonomy / Clash·WSL·Codex环境域内 |
 | `Hot-Fix` | 2026-07-14 | 2026-07-20 | 暂存盘。**07-20 侦察**：晚于 07-14 唯一新增=`auto-compact bug.png`(图片原材料，非 md)，非排除 .md 全 ≤07-13(重构repo-for-codex 那批)。仍暂存未收敛，无新增可入。H1 FAB 多 AI 共享 repo 方法论维持暂不入 |
 | `xiaoduo-Excel task` 等 | — | 未扫 | 按需 |
 

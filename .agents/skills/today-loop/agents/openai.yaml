@@ -1,0 +1,8 @@
+interface:
+  display_name: "Today Loop"
+  short_description: "跨多个 plan 自动推进、审查、持久记账并安全停止"
+  default_prompt: "Use $today-loop to run authorized plans sequentially with durable state and safety gates."
+
+policy:
+  allow_implicit_invocation: false
+

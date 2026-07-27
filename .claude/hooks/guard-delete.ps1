@@ -18,7 +18,8 @@
 # L2 与旧 L1 的区别（2026-06-09）：L1 对命令全文跑 substring 正则，把 `find -name "*RD*"` 里的
 #   字符串字面量 RD 误判成删除；L2 先解析 AST，只在命令位置找删除动词，消除该类误报，仍抓 foreach { Remove-Item }。
 # 边界：防「误包」不防「故意混淆」（base64/别名/变量间接 `& $var` 仍可绕）。
-#   fail-open：脚本自身出错绝不阻断会话（exit 0）。
+#   fail-open + 诊断日志：脚本自身出错 exit 0 放行（绝不阻断会话），但写一行 hooks-error.log 到账号根（有迹可查，
+#   见末尾 catch 块）。B 模式判定 Test-BModeActive 是 fail-closed（拿不准退回 ask 多弹，方向=拦），两者别混。
 
 # ---- 白名单根（改动 1c）：只有绝对路径落在这些根之下的字面量删除才自动放行 ----
 $script:WhitelistRoots = @(
@@ -84,6 +85,60 @@ function Test-DeleteCommandWhitelisted {
     if (-not (Test-PathWhitelisted $p)) { return $false }
   }
   return $true
+}
+
+# P0 清标记窄例外（2026-07-21，codex 终审会话约束版）：B 模式收尾清"自己"标记文件的 rm 会走同一 hook，
+#   此时标记还在 → Test-BModeActive 判 B → deny → 清不掉 = 死锁。解：给"删标记自身"开极窄 allow 例外。
+#   ★会话约束（codex 终审）：本函数只判"命令形态 + 目标路径形态"，不判"是不是当前 B 会话的标记"——
+#     后者由判决段在 Test-BModeActive 之后用 sid 比对（仅 $isClearMarker -and $bMode 才放行）。
+#     这样非 B 会话发同样命令清不掉 B 标记（走 ask），只有当前 B 会话能清自己那张。
+#   判据（全满足才返回目标路径，任一不满足返回 $null → 不是清标记候选，照常走主判决）：
+#   ① 命令是孤立 Remove-Item（命令名直接是删除动词，不包在 find/xargs/bash 包装里）；
+#   ② 所有非 flag 参数是纯字面量 StringConstantExpression（无变量/可扩展串/子表达式）；
+#   ③ 所有路径参数规范化后都落在 CLAUDE_CONFIG_DIR\.b-mode-active\ 目录下（无通配、无 .. 穿越、无目录外目标）；
+#   ④ 无 -Recurse（清单个标记文件不需递归）。
+#   ⑤ 目标文件本身不是 reparse point（防 .b-mode-active\<sid>.json 被换成 junction 指向别处，删它顺删目标）。
+#   返回：合法时返回规范化后的目标路径（供判决段和"自己标记路径"比对）；否则 $null。
+function Get-ClearMarkerTarget {
+  param($CmdAst)
+  try {
+    $configDir = $env:CLAUDE_CONFIG_DIR
+    if ([string]::IsNullOrWhiteSpace($configDir)) { return $null }
+    $markerDirFull = [System.IO.Path]::GetFullPath((Join-Path $configDir '.b-mode-active'))
+    # 尾部加分隔符，便于 StartsWith 判"落在目录内"
+    if (-not $markerDirFull.EndsWith([System.IO.Path]::DirectorySeparatorChar)) { $markerDirFull += [System.IO.Path]::DirectorySeparatorChar }
+    $elements = $CmdAst.CommandElements
+    $targets = @()
+    for ($i = 1; $i -lt $elements.Count; $i++) {
+      $el = $elements[$i]
+      if ($el -is [System.Management.Automation.Language.CommandParameterAst]) {
+        $pText = [string]$el.Extent.Text
+        if ($pText -match '-Recurse') { return $null }  # 清标记不该递归
+        continue
+      }
+      if ($el -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+        $p = $el.Value
+        $pFull = $null
+        try { $pFull = [System.IO.Path]::GetFullPath($p) } catch { return $null }
+        if ([string]::IsNullOrEmpty($pFull)) { return $null }
+        # 必须落在 .b-mode-active\ 目录内（含 .. 穿越会被 GetFullPath 规范化后跑出目录 → StartsWith 失败）
+        if (-not $pFull.StartsWith($markerDirFull, [System.StringComparison]::OrdinalIgnoreCase)) { return $null }
+        # 闸门⑤：目标文件本身不能是 reparse point（防被换成 junction/symlink 删到别处）
+        if (Test-Path -LiteralPath $pFull) {
+          $item = Get-Item -LiteralPath $pFull -Force -ErrorAction Stop
+          if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
+        }
+        $targets += $pFull
+      } else {
+        return $null  # 变量/可扩展串/数组/子表达式 → 静态不知指向 → 不当例外
+      }
+    }
+    if ($targets.Count -eq 0) { return $null }  # 没有路径参数 → 不是清标记
+    # 多目标只要都落在标记目录内，返回所有（判决段会逐个和"自己的标记路径"比对，全对才放行）
+    return $targets
+  } catch {
+    return $null
+  }
 }
 
 # 剥引号字面量（L3.1）：把 '...' 与 "..."（含 \" 转义）的内容替换为单个空格，
@@ -161,6 +216,7 @@ try {
   )
 
   $hitReason = $null
+  $clearMarkerTargets = $null  # P0 清标记候选目标列表（非空 = 这条命令是"清 .b-mode-active 目录内文件"形态）
 
   # ---- L3：AST 结构化识别 ----
   $tokens = $null; $errors = $null
@@ -235,9 +291,18 @@ try {
         $argText = ($c.CommandElements[1..($c.CommandElements.Count - 1)] | ForEach-Object { $_.Extent.Text }) -join ' '
       }
 
-      # 1) 直接删除动词 → 先试白名单放行，未过才 ask
+      # 1) 直接删除动词 → 先试白名单放行；再试 P0 清标记候选（不直接放行，记目标进判决段判 B）
       if ($deleteVerbs -contains $lname) {
         if (Test-DeleteCommandWhitelisted $c) { continue }
+        $cmt = Get-ClearMarkerTarget $c
+        if ($cmt) {
+          # P0 候选：形态像"清 .b-mode-active 目录内文件"。不在此放行——带到判决段，
+          # 仅当 $bMode 且目标恰好是当前会话自己的标记文件才放行（防别的会话拆刹车）。见判决段。
+          if (-not $clearMarkerTargets) { $clearMarkerTargets = @() }
+          $clearMarkerTargets += @($cmt)
+          $hitReason = "命令含删除动作(命令名 '$name'，目标在 .b-mode-active 目录内，P0 候选待判决段判 B)。"
+          break
+        }
         $hitReason = "命令含删除动作(命令名 '$name')，强制确认——包进脚本/循环/管道的删除也会被抓到。"
         break
       }
@@ -275,12 +340,114 @@ try {
     }
   }
 
+  # ---- B 模式判定（2026-07-21 第 3 层 hook：B 模式 rm 硬阻断）----
+  # 设计：见 X-rm顽疾-第3层hook设计稿-2026-07-21.md。B 模式入口（/free /today /team-task /today-loop）
+  #   启动时写标记文件 .b-mode-active（JSON: entry + ts + session_id），收尾清标记。hook 命中删除类时
+  #   读标记：B 模式 → deny（不弹框、reason 回灌给 AI、AI 改追加式/攒后置门）；非 B → 维持 ask（交互不变）。
+  # fail-closed（拿不准一律退回 ask=非 B 行为，只朝"多拦/多弹"掉，绝不朝"漏拦"掉）：
+  #   标记读不到 / JSON 解析失败 / 缺 ts / ts 超过 TTL(2h) / 路径拼不出 → 全返回 $false。
+  # ---- B 模式判定（2026-07-21 第 3 层 hook：B 模式 rm 硬阻断；会话级标记文件，codex 终审版）----
+  # 设计：见 X-rm顽疾-第3层hook设计稿-2026-07-21.md + plan-rm顽疾-第3层hook施工交接 P0+P1+会话级段。
+  # B 模式入口（/free /today /team-task /today-loop）启动写"本会话专属"标记文件：
+  #   $env:CLAUDE_CONFIG_DIR\.b-mode-active\<session_id>.json（JSON: entry + ts + session_id）。
+  #   收尾清"自己的"标记文件。hook 命中删除时按本次 stdin.session_id 找自己那张：
+  #   文件存在 + JSON 里 session_id == 本次 sid + ts 在 TTL 内 → B 模式 deny；任一不对 → 非 B ask。
+  # 会话级文件缘由（codex 终审 2026-07-21）：单文件 `.b-mode-active` 会被同账号并发 B 会话覆盖（后写覆盖先写，
+  #   先写者保护静默失效）+ 收尾互删。改每会话一文件（文件名含 sid）→ 同账号多 /free 各自独立、不覆盖不互删。
+  #   配合 P0 清标记例外（见 Test-ClearMarkerException）只放行"当前 B 会话清自己那张" → 别的会话拆不了你的刹车。
+  # fail-closed（拿不准一律退回 ask=非 B 行为，只朝"多拦/多弹"掉，绝不朝"漏拦"掉）：
+  #   CLAUDE_CONFIG_DIR 没设 / sid 非法 / 自己的标记文件读不到 / JSON 解析失败 / 缺字段 / session_id 对不上 / ts 超过 TTL / ts 在未来 → 全 $false。
+  # TTL=30min + 未来时间戳容差 age>=-5min（防时钟漂移/误写未来 ts 长期有效）。
+  function Test-BModeActive {
+    param([string]$CurrentSessionId)
+    $ttlMinutes = 30
+    $futureToleranceMinutes = 5
+    try {
+      $configDir = $env:CLAUDE_CONFIG_DIR
+      if ([string]::IsNullOrWhiteSpace($configDir)) { return $false }
+      if ([string]::IsNullOrWhiteSpace($CurrentSessionId)) { return $false }
+      # sid 做文件名安全处理：只留字母数字和 -（会话 ID 是 UUID，本就只含这些；防路径注入/../等）
+      $safeSid = ($CurrentSessionId -replace '[^A-Za-z0-9-]', '').Trim('-')
+      if ([string]::IsNullOrWhiteSpace($safeSid)) { return $false }
+      $markerPath = Join-Path (Join-Path $configDir '.b-mode-active') ($safeSid + '.json')
+      if (-not (Test-Path -LiteralPath $markerPath)) { return $false }
+      $raw = $null
+      try { $raw = Get-Content -LiteralPath $markerPath -Raw -ErrorAction Stop } catch { return $false }
+      if ([string]::IsNullOrWhiteSpace($raw)) { return $false }
+      $obj = $null
+      try { $obj = $raw | ConvertFrom-Json -ErrorAction Stop } catch { return $false }
+      if (-not $obj) { return $false }
+      $entry = [string]$obj.entry
+      $ts    = [string]$obj.ts
+      $sid   = [string]$obj.session_id
+      if ([string]::IsNullOrWhiteSpace($entry) -or [string]::IsNullOrWhiteSpace($ts) -or [string]::IsNullOrWhiteSpace($sid)) { return $false }
+      # JSON 里 session_id 必须对上当前会话（文件名已按 sid 定位，这里是二次确认防文件被错放/改名）
+      if (-not ($sid -eq $CurrentSessionId)) { return $false }
+      # ts 解析：用 [datetime]$ts 强转 + try/catch。非法 ts（如 "not-a-date"）强转会抛异常 → 本 catch 接住 → return $false（fail-closed）。
+      # 不用 [datetime]::TryParse($ts,[ref]$dt)——pwsh 7 无匹配的 2 参数重载，调用本身抛 "Cannot find an overload"（会被外层 catch 吞 → 标记永远无效，是早期 bug 的根因）。
+      $tsDt = $null
+      try { $tsDt = [datetime]$ts } catch { return $false }
+      if (-not $tsDt) { return $false }
+      $ageMin = ((Get-Date) - $tsDt).TotalMinutes
+      if ($ageMin -gt $ttlMinutes) { return $false }
+      if ($ageMin -lt (-1 * $futureToleranceMinutes)) { return $false }
+      # 顺手 GC：当前会话标记有效，扫 .b-mode-active\ 目录删掉其他 ts 超过 TTL 的僵尸 <sid>.json
+      # （崩了没清标记的会话留下的垃圾）。本会话自己的那张不删。失败 SilentlyContinue 不影响 return。
+      try {
+        $markerDir = Split-Path $markerPath -Parent
+        if (Test-Path -LiteralPath $markerDir) {
+          Get-ChildItem -LiteralPath $markerDir -Filter '*.json' -File -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.FullName -ieq $markerPath) { return }  # 跳过自己那张
+            try {
+              $j = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+              $jts = [datetime]([string]$j.ts)
+              if (((Get-Date) - $jts).TotalMinutes -gt $ttlMinutes) {
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+              }
+            } catch {
+              # 僵尸文件 JSON 坏或读不了：留它等下次或手工清，不在此删（防误删非过期文件）
+            }
+          }
+        }
+      } catch {}
+      return $true
+    } catch {
+      return $false  # 任何意外 → fail-closed
+    }
+    return $false
+  }
+  # 给定 session_id 算出它的标记文件绝对路径（P0 清标记例外 + skill 侧统一用同一路径公式）
+  function Get-BModeMarkerPath {
+    param([string]$CurrentSessionId)
+    $configDir = $env:CLAUDE_CONFIG_DIR
+    if ([string]::IsNullOrWhiteSpace($configDir) -or [string]::IsNullOrWhiteSpace($CurrentSessionId)) { return $null }
+    $safeSid = ($CurrentSessionId -replace '[^A-Za-z0-9-]', '').Trim('-')
+    if ([string]::IsNullOrWhiteSpace($safeSid)) { return $null }
+    return (Join-Path (Join-Path $configDir '.b-mode-active') ($safeSid + '.json'))
+  }
+
   if ($hitReason) {
+    $curSid = $null
+    try { $curSid = [string]$data.session_id } catch {}
+    $bMode = Test-BModeActive -CurrentSessionId $curSid
+    # P0 清标记例外（codex 终审会话约束版）：仅当 当前是 B 模式 + 命令目标恰好全等于"本会话自己的标记文件"
+    #   才放行（exit 0 空输出 = allow）。非 B 会话或目标不是自己标记 → 不放行，照常 deny/ask。防别的会话拆刹车。
+    if ($clearMarkerTargets -and $bMode) {
+      $ownMarker = Get-BModeMarkerPath $curSid
+      $allOwn = $ownMarker -and ($clearMarkerTargets | Where-Object { -not ($_ -ieq $ownMarker) }).Count -eq 0
+      if ($allOwn) {
+        exit 0  # 当前 B 会话清自己那张标记，放行（不 deny、不 ask、不回灌 reason）
+      }
+    }
+    $decision = if ($bMode) { 'deny' } else { 'ask' }
+    $reason = if ($bMode) {
+      "$hitReason [B 模式硬阻断：B 自主流程中途不发 rm，攒后置人工门或改追加式（第 3 层 hook deny）。]"
+    } else { $hitReason }
     $out = @{
       hookSpecificOutput = @{
         hookEventName            = 'PreToolUse'
-        permissionDecision       = 'ask'
-        permissionDecisionReason = $hitReason
+        permissionDecision       = $decision
+        permissionDecisionReason = $reason
       }
     } | ConvertTo-Json -Compress -Depth 5
     # 直接写 UTF-8 字节流，绕过控制台默认编码（中文 reason 否则会乱码）
@@ -292,5 +459,29 @@ try {
   }
   exit 0
 } catch {
+  # fail-open + 诊断日志（2026-07-21）：守卫脚本自身任何异常都 exit 0 放行，避免 hook bug 阻断用户正常命令
+  # （比静默放行删除更糟的是把用户卡死）。但纯静默 = 删除守卫一旦有 bug 就"空输出 exit 0"被无视 → 失守无迹可查。
+  # 折中：放行 + 写一行诊断日志到当前账号根的 hooks-error.log（带时间戳 + 异常摘要 + 行号），有迹可查又不扰民。
+  # 与 Test-BModeActive 的 fail-closed 区分：那是"B 模式判定拿不准 → 退回 ask 多弹"，方向是拦；这里是"脚本整体崩 → 放行"，方向是放。
+  try {
+    # 日志写当前账号根（CLAUDE_CONFIG_DIR，与 B 模式标记同源定位）；缺失则不写（不回退到别的账号根，防记错地方）
+    $logPath = $null
+    if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) {
+      $logPath = Join-Path $env:CLAUDE_CONFIG_DIR 'hooks-error-guard-delete.log'
+    }
+    if ($logPath) {
+      # 简单轮转：日志超 1MB 先挪 .old 再写新（轮转失败 SilentlyContinue，绝不让诊断逻辑反过来让 catch 再抛）
+      try {
+        if (Test-Path -LiteralPath $logPath) {
+          $size = (Get-Item -LiteralPath $logPath -Force -ErrorAction Stop).Length
+          if ($size -gt 1MB) {
+            Move-Item -LiteralPath $logPath -Destination ($logPath + '.old') -Force -ErrorAction Stop
+          }
+        }
+      } catch {}
+      $line = '[' + (Get-Date).ToString('s') + '] guard-delete.ps1 EXC: ' + ($_.Exception.Message -replace '\s+', ' ').Trim() + ' | line#' + $_.InvocationInfo.ScriptLineNumber
+      Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+    }
+  } catch {}
   exit 0
 }

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Session New"
+  short_description: "固化主线、计划与状态，供新会话接续"
+  default_prompt: "Use $session-new to persist the current plan and handoff state for a fresh session."
+
+policy:
+  allow_implicit_invocation: false
+

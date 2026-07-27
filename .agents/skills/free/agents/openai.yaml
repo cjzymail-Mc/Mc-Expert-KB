@@ -1,0 +1,8 @@
+interface:
+  display_name: "Free"
+  short_description: "全托管执行当前任务并走原生陪审与安全收尾"
+  default_prompt: "Use $free to run this task autonomously within the repo safety boundaries."
+
+policy:
+  allow_implicit_invocation: false
+

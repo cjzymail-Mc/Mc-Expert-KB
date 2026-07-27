@@ -8,6 +8,8 @@ description: 接下来这个任务走 mc-expert 陪审 + 深度授权(B)，完�
 接下来这个任务走 mc-expert 陪审 + 深度授权(B)；
 完成阶段目标后再请求用户审核介入。
 
+> 注：2026-07-22 项目权限层已转向 Claude Code **auto-mode**（classifier 自动判断），原「第 3 层 guard-delete hook + .b-mode-active 标记」路线已撤销（hook 注册从 settings 删除，标记机制无消费者）。/free 不再写/清任何标记文件。rm 顽疾兜底当前 = 纯纪律层（本节「权限命令后置人工门」+ memory `feedback-no-rm-midflight-defer-to-human-gate`）。转向详情见 feature-07 `修正rm顽疾-2026-07-22/` 决策卡与 settings 修改记录。
+
 【B 自主流程中途 · 权限命令一律后置人工门】
 - rm/删除/无备份覆盖、伸进 `~/.claude`·系统/敏感目录、对外交付——这类会触发权限框的命令，**绝不在 B 自主流程中途发起**（会死等缺席用户 + 死锁后台 agent，比报错更坏）。
 - 一律攒进「待人工处理」清单，收尾一次性列给用户批量处理。forensic/排查也不例外（别用含 `rm`/伸敏感目录的命令去查问题）。

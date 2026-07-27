@@ -32,8 +32,13 @@
 > ⚠️ 核实 2026-07-19 · 官方 permission-modes 文档 + 本机 4 探针矩阵实测（CLI v2.1.207）。版本敏感、易过期。
 
 - **显式 `ask` 规则压过 `auto` mode 放行**（官网原文 "Explicit ask rules still force a prompt"）：即使切到 `auto` mode 且其后台分类器想放行，`settings.local.json` 里 `ask: ["Bash(rm *)"]` 这类**显式规则仍强制弹框**。→ **rm 弹框的根因是 ask 规则，不是 auto 没激活**——别误判"rm 弹框 = auto 没激活 / 模型不支持 auto"，那是错诊断方向。
-  - 实测 4 探针矩阵坐实（glm-5.2 + auto on）：`rm -f`/`rmdir`（在 ask 列表）→ 弹框；`mkdir`/`Write 新文件`（不在 ask 列表）→ **静默通过**。后者证明 auto mode **确实激活**（非 default/manual 模式），前者证明 ask 压过 auto。
-- **第三方模型（如 glm-5.2）下 auto mode 实测可用**（官网 auto mode 模型清单只列 Claude 系列 Opus 4.6+/Sonnet 4.6+/Fable 5，glm-5.2 未列但实测激活）——这是对官网门槛的**实证扩展**（官网未覆盖第三方模型）。但**降为参考备注**：单点实测、可能随版本/模型变化，不外推为"所有第三方模型都支持 auto"。
+  - 本机 4 探针（glm-5.2 + auto on）：`rm -f`/`rmdir`（在 ask 列表）→ 弹框；`mkdir`/`Write 新文件`（不在 ask 列表）→ 静默通过。**但这只坐实「ask 压过 auto」这个根因，坐实不了「auto 激活/可用」**——见下条证据强度订正。
+- ⚠️ **「glm-5.2 下 auto mode 实测可用」证据不足，降级为存疑**（2026-07-23 订正，原 07-19 写成"实测激活"是探针不锋利导致的过度断言）：两边都不能一锤定音——
+  1. **探针不够锋利**：07-19 探针里 mkdir/Write 的"静默通过"在方案 A **全 allow 配置下本就该静默**（走 allow 规则、不需 auto），**无法区分「allow 放行」vs「auto 放行」**——这是阴性结论却没做阳性对照（违 [[../reflexes]]「阴性结论需阳性对照」）。要证 auto 激活，须先证明"这些命令是 auto 放行而非 allow 放行"，探针做不到。
+  2. **关键场景未测**：auto 分类器对 glm-5.2 的 **rm 判断是否生效**根本没测（07-19 §7.2 自己已承认）——这是"glm 支持 auto"结论最脆的地方。
+  3. **官网白名单不覆盖第三方**：官网 auto mode 模型清单只列 Claude 系列（Opus 4.6+/Sonnet 4.6+/Fable 5），glm-5.2 未列；但**不在清单 ≠ 不能用**（第三方走 OpenRouter/自定义 endpoint 官网本就不覆盖）——所以官网清单也**不能证伪** glm 支持 auto。
+  - **结论**：「glm 是否支持 auto」须**隔离 repo + 真发 rm 的探针**才能定死，07-19 缺的就是这个。当前既不肯定也不否定。
+- **删 guard 的主论证不依赖「glm 不支持 auto」**（2026-07-23 补，正解而非替代被订正措辞）：即使 auto 激活，**auto 分类器对 glm-5.2 的 rm 判断是否生效未测** → 删 guard = 拿掉**确定性**兜底换一个**对 glm rm 未验证的概率分类器**。**概率判断不可替代确定性兜底**（见 [[../decisions/self-compliance-probabilistic]]「可靠性归冗余层两档、别混」）。故保留 ask 门 + guard 作 rm 硬底线，auto mode 仅留作减扰非删除类命令。
 - **要真让 auto 分类器接管 rm 判断**（而非 ask 门一视同仁弹框）= 从 `ask` 移除 `Bash(rm *)` → 让 auto 语义判断（官网承诺拦 glob rm / 会话前文件 / 递归变量删除、放行会话内具名产物）。但有**两个未验证风险**别贸然移除 ask 门：① auto 分类器是概率判断（非确定保证）；② auto 对第三方模型 rm 的分类是否生效未测（只测了非删除类命令静默）。现实路径 = **保留 ask 门作 rm 硬底线**，auto mode 留作减扰非删除类命令 + 未来验证后才评估移除 ask。
 
 原档：`Mc-emoji/X-顽疾复盘-B模式中途rm反复犯-2026-07-19.md` §7（4 探针矩阵 + 官网原文）。auto mode 版本门槛细节（v2.1.142+ defaultMode 必须放 user settings / 模型清单 / fallback 阈值）留源 repo。
