@@ -53,6 +53,8 @@ pwsh -NoProfile -File $stateTool -Action Show
 10. 每个活跃角色窗口生成并仅在自身调度上下文持有唯一 `worker_token`；state 只保存 token 的 SHA-256，不得通过 `Show` 泄漏原 token。状态动作续租 `worker_lease_deadline`；第二个同角色 token 在租约有效时只得 `WORKER_ACTIVE`。普通自动恢复必须等租约过期；用户显式 takeover 可提交 `takeover:<run_id>` 控制凭证立即轮换 token，并记录 `control_entry`。
 11. 所有 mutating action 由 repo 级命名 mutex 串行化，状态迁移使用 `ready|working` phase；任务文件在 Consume/Handoff/Done/WaitHuman/ResolveHuman continue/rework 前必须重新核验 `task_sha256`。冻结任务损坏时仅 `Show/status` 与 `Cancel` 可用。
 
+**调度等待纪律**：`state` 尚不存在、planner 正在监视 `wait_human`、`paused_budget`、`running + turn=对方`，以及一次检查后 state 未变化，都只是调度层的正常等待态，不等于执行阻塞。planner 必须保留本平台原生调度，按配置间隔持续复查；Codex 不得仅因这些状态持续多轮就把 active Goal 标成 `blocked`，Claude 不得删除 loop。除用户显式停止外，只有无新任务的 `done|cancelled` 才结束 planner 调度。
+
 ## 自主轴与人工门归并（coder/planner 共用）
 
 本 run 采用深度授权。只有已经在初始任务中写明 `done_when`、允许范围、禁止动作、验证方式与人工门边界，并被用户认定适合自主执行的任务，才应进入 double-session。运行中的目标是：普通判断不打断用户，planner 最大限度承接人工驱动，非阻塞人工事项留到末尾一次性汇报。
@@ -85,31 +87,33 @@ coder 采用深度授权 B 模式，但不调用 `/free` 或 `$free`，也不运
 
 planner 只审核，不替 coder 修改任务产物：
 
-1. 未初始化，或终态之后出现非空、哈希不同且时间更新的 `temp.md` 时，等待 coder `Init`；只能查长度、`LastWriteTimeUtc` 和文件哈希，不得读取正文。
-2. `paused_budget` 时保持原生等待调度，只查看 state，等待 coder `Init`；不得读取或清空 `temp.md`，不得退出并要求用户稍后重启 planner。
-3. `running + turn=coder` 时等待；`running + turn=planner` 时先 `CheckBudget -Role planner`，再 `Consume -Role planner`。
-4. **审核自主阶梯**：读取冻结任务与 coder 交接后，依次执行，不得跳步直接 REWORK 或 `WaitHuman`：
+1. planner 入口先固化 repo 与配置中的检查间隔并建立本平台原生调度。`state` 不存在时立即进入“预启动监视”：不虚构或绑定 `run_id`，按配置间隔复查，直到 coder `Init` 后自动绑定新 run。首次只报告“已进入预启动等待；将在配置间隔后自动复查，无需再次输入 planner 启动指令”，不得直接退出。
+2. 全新 planner session 看到遗留 `wait_human` 时，不重复制造三选一人工门、不绑定旧 `run_id`、不调用 `ForceInit`；只用 `Show -ExpectedRepo` 观察并按配置间隔复查，等待 coder `ResolveHuman` 或 `ForceInit`。已经绑定该 run 的 planner 同样保持等待，但保留旧绑定。若 coder `ForceInit` 后新 state 的 `replaced_run_id` 精确等于旧绑定且 `replaced_status=wait_human`，允许自动改绑新 `run_id`；其他 `RUN_MISMATCH` 仍须 fail-loud。
+3. 无新任务的 `done|cancelled` 才结束 planner 调度。终态之后出现非空、哈希不同且时间更新的 `temp.md` 时，清除旧 run 绑定并进入预启动监视，等待 coder `Init`；只能查长度、`LastWriteTimeUtc` 和文件哈希，不得读取正文。
+4. `wait_human|paused_budget` 时保持原生等待调度，只查看 state，等待合法控制入口或 coder `Init`；不得读取或清空 `temp.md`，不得退出并要求用户稍后重启 planner。
+5. `running + turn=coder` 时等待；`running + turn=planner` 时先 `CheckBudget -Role planner`，再 `Consume -Role planner`。
+6. **审核自主阶梯**：读取冻结任务与 coder 交接后，依次执行，不得跳步直接 REWORK 或 `WaitHuman`：
    1. 自己检查实际文件、Git diff、测试输出与现有证据，不得只信 coder 自述；
    2. 存在合理替代路径时，至少做一次替代性只读复验，例如重新核对 `done_when`、换工具读取或交叉比对；
    3. 仍属重大、高影响且证据支持多个解释的低置信判断时，调用一次性只读 mc-expert；普通缺证据直接进入下一步；
    4. 只有 coder 能补证据或做定向修复时，才发 REWORK；
    5. 只有命中共用段第 4 条允许的人工门，才进入 `WaitHuman`。
-5. `REWORK`：写可执行意见、验非空、`Handoff -Role planner -To coder`。每份 REWORK 必须包含：稳定阻塞点编号 `B-xxx`；实际观察到的事实；缺少的证据或未满足的 `done_when`；coder 下一步具体取证/修复动作；验收方式；允许修改范围；当前 `attempt 1/2` 或 `attempt 2/2`。同时续传三个累积清单，不得以“再看看”代替可执行指令。
-6. `PASS`：只有整个冻结任务的 `done_when` 均有实际证据，且剩余 `PENDING_HUMAN_NONBLOCKING` 确认不阻断验收时，才写最终证据并一次性汇报累积的自主裁决与待人工事项，验非空后 `Done -Role planner`。任何阻断 `done_when` 的待人工事项都不得以清单形式带过或伪装成 `PASS`。
-7. 第一次收到某 `failure_key` 必须自己核查证据并给出可执行 REWORK，不得 `WaitHuman`。只有 state 中同 key 的独立 coder 报告数达到 2，planner 才可不写 `temp.md` 调用 `WaitHuman -Role planner -Reason <自足摘要>`。approval pass 必须落 `outcome=approval_pass, decision_by=approval_entry`，不冒充 planner 独立 PASS。
+7. `REWORK`：写可执行意见、验非空、`Handoff -Role planner -To coder`。每份 REWORK 必须包含：稳定阻塞点编号 `B-xxx`；实际观察到的事实；缺少的证据或未满足的 `done_when`；coder 下一步具体取证/修复动作；验收方式；允许修改范围；当前 `attempt 1/2` 或 `attempt 2/2`。同时续传三个累积清单，不得以“再看看”代替可执行指令。
+8. `PASS`：只有整个冻结任务的 `done_when` 均有实际证据，且剩余 `PENDING_HUMAN_NONBLOCKING` 确认不阻断验收时，才写最终证据并一次性汇报累积的自主裁决与待人工事项，验非空后 `Done -Role planner`。任何阻断 `done_when` 的待人工事项都不得以清单形式带过或伪装成 `PASS`。
+9. 第一次收到某 `failure_key` 必须自己核查证据并给出可执行 REWORK，不得 `WaitHuman`。只有 state 中同 key 的独立 coder 报告数达到 2，planner 才可不写 `temp.md` 调用 `WaitHuman -Role planner -Reason <自足摘要>`。approval pass 必须落 `outcome=approval_pass, decision_by=approval_entry`，不冒充 planner 独立 PASS。
 
 ## 人工控制与恢复
 
 - 四入口接受中文短命令 `状态/继续/返工/通过/取消/接管`，分别对应 `status/continue/rework/pass/cancel/takeover`。只有用户本轮明确输入控制词时才执行，模型不得看到 `wait_human` 后自动恢复。
 - `状态` 只调用 `Show` 并投影状态，不创建 Goal/loop、不刷新租约、不迁移状态。
 - 既有同角色 session 在 `wait_human` 下输入 `继续/返工/通过` 时，入口从当前绑定 state 内部取得一次性 `human_approval_id` 并传给 `ResolveHuman`；全新或丢失上下文 session 仍须使用 `resume <decision> <human_approval_id>`，裸“继续”不得猜 run 或隐式 takeover。
-- 全新 session 发现同 repo 遗留 `wait_human` 时，必须显示旧 run 摘要并让用户明确选择：`恢复旧任务 / 取消旧任务并强制初始化 / 保留人工门并退出`。不得默认选择，不创建 Goal/loop。只有 coder 入口在用户本轮明确选择第二项后，才可用旧 run、repo 与当前 approval id 调 `ForceInit`；planner 入口只提示改由 coder 入口执行。
+- 全新 coder session 发现同 repo 遗留 `wait_human` 时，必须显示旧 run 摘要并让用户明确选择：`恢复旧任务 / 取消旧任务并强制初始化 / 保留人工门并退出`。不得默认选择，不创建 Goal/loop。只有 coder 入口在用户本轮明确选择第二项后，才可用旧 run、repo 与当前 approval id 调 `ForceInit`。全新 planner session 不重复询问或退出，按“planner 唯一流程”进入预启动监视；它仍不得自行恢复、`ForceInit` 或消费新任务。
 - `ForceInit` 只接受 `wait_human`，要求非空且较旧 state 更新、hash 不同的新 `temp.md`，在 repo mutex 内冻结新任务并创建全新 coder run；新 state 记录 `replaced_run_id/replaced_status/replaced_at` 并清空旧批准编号与 ledger。旧窗口随后必须因 `RUN_MISMATCH` 被拒绝。其他状态调用或未检测到新任务均拒绝。
 - `继续` 分态：`wait_human` 恢复同一 run；`paused_budget` 由 coder 开新 segment、planner 工作或待机；`running` 立即检查但不重复创建调度器；`done|cancelled` 拒绝复活。非 `resume_turn` 角色不得扮演另一角色。
 - `stop` 入口只调用 `Cancel`；允许从 `running|paused_budget|wait_human` 终止，同一 scheduler 下次 tick 看到 `cancelled` 必须退出。重复 stop 幂等返回原 cancelled 状态；done 后 stop 明确返回 `CANCEL_NOT_ALLOWED_DONE`。脚本只记录 `decision_by=control_entry`。
 - `continue|rework|pass|cancel` 只能用于当前 `wait_human` 的 `allowed_resolutions`，并必须提交匹配的一次性 `human_approval_id`；不匹配即拒绝，成功后立即清空 id。
 - 中断恢复优先原 token；token 丢失时，自动恢复必须等租约过期。用户显式 `Takeover -HumanApprovalId takeover:<run_id>` 可立即接管并轮换 token；不得靠扫描进程或猜窗口存活。
-- 所有后续动作都传 `ExpectedRepo`、`ExpectedRunId`、`WorkerToken`；`Show/status` 至少传前两项。
+- 所有后续动作都传 `ExpectedRepo`、`ExpectedRunId`、`WorkerToken`；`Show/status` 至少传前两项。唯一例外是尚未绑定 run 的 planner 预启动监视：只传 `ExpectedRepo`，观察到可绑定的 `running|paused_budget` 后立即固化 `ExpectedRunId`。
 
 ## 常用命令
 

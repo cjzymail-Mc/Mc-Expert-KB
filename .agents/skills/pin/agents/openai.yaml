@@ -1,0 +1,7 @@
+interface:
+  display_name: "Pin"
+  short_description: "手工捕获用户纠正并写入中央纠正信号池"
+  default_prompt: "Use $pin to capture the user's correction in the central pinned signal sink."
+
+policy:
+  allow_implicit_invocation: false

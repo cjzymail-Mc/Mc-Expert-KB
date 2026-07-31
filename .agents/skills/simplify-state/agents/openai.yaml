@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simplify STATE"
+  short_description: "精简根 STATE.md，同时保留恢复入口、动态边界和历史追溯"
+  default_prompt: "Use $simplify-state to compact this repository root STATE.md into a current, recoverable snapshot."

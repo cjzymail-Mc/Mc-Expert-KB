@@ -18,12 +18,13 @@ description: 乙-1 一键反思回路——增量挖历史纠正→Step B 归纳
 ## 前置自检（不过就停下报错，别硬跑）
 1. `cd "D:/Downloads/Mc Claude Code Workshop/Mc-emoji/[feature-05-loop-self-improvement]/历史扫描"`。
 2. 确认 `out/v2_baseline.jsonl`（基线，只读）+ `processed_ledger.jsonl`（台账）存在。基线不在 → 停报「基线缺失，先核实 out/ 结构」，别自动重建。
-3. 记当天日期 `<date>`（YYYY-MM-DD）用于命名产物。
+3. 确认中央 pin raw sink `D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.claude/auto-memory/pin/pinned-candidates.jsonl` 存在且可读；缺失 → 明确停报 `PIN_SINK_NOT_FOUND`，不得把 0 条冒充正常，也不得回退旧 feature-05 sink。
+4. 记当天日期 `<date>`（YYYY-MM-DD）用于命名产物。
 
 ## Step 1 · 挖 + 去重（一条命令，机械、非破坏）
 跑（**走 Git Bash / Bash 工具**，单行；别粘 PowerShell）：
 ```
-python mine_corrections.py --incremental "C:/Users/xy198/.claude/projects" "C:/Users/xy198/.claude-xh/projects" "C:/Users/xy198/.claude-mc/projects"
+python mine_corrections.py --incremental --pin-log "D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.claude/auto-memory/pin/pinned-candidates.jsonl" "C:/Users/xy198/.claude/projects" "C:/Users/xy198/.claude-xh/projects" "C:/Users/xy198/.claude-mc/projects"
 ```
 - glm 账号不扫；3 个「（历史）」根不在扫描列内。
 - diff = gold − (基线 ∪ 台账终结类)；刹车类仍冒头累计。记下末行 `rundir` + `new_gold=N`。

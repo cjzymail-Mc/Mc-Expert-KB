@@ -118,7 +118,7 @@ task **正常收尾**后(完成、或带卡点上报但未熔断),不要就此�
    - **dedup 边界提示**:第 3 步只查 capture_hook 抓的 `live-candidates.<session>.jsonl`,**不查 `pinned-candidates.jsonl`**(已 pin 历史)——故 PIN 候选可能含历史已 pin 项,`pin_capture.py` 文件级 dedup 是人工门批量落账时的唯一兜底(命中即跳过、不报错)。
 7. **报告行**:pin/drop/掉线降级任一发生 → 在 session-new 段产出的 plan 里记一行 `pin N / drop M / 降级 K 落 review-queue` + 附上第 6 步的提案清单(漏跑频率可观测,供决定是否上路线 C Stop hook)。
 
-**人工门批量落账(pin 段提案化后的落账方式,发生在 Mc-emoji repo 内、由用户显式发起)**:用户拿到 pin 提案清单 → 审核 → 拍板"这 N 条 pin";**LLM 一次性批量落账** = 对用户确认的 N 条,循环调 `pin_capture.py --platform <claude/codex> --corr ... --ai ... --followup ... --note ...`(N 次)。`pin_capture.py` 文件级 dedup 幂等,重复自动跳过、不报错。**dedup 按 `ai + corr + followup` 三字段算——followup 措辞差异会导致 hash 不同、可能重复入网**,故人工门审提案时若某条疑似历史已 pin,**以 `ai + corr` 为主核对**、不靠脚本 dedup 兜底。落账发生在 Mc-emoji(sink 在场)、由用户显式发起——不是跨 repo 自动调用 `$pin` skill。
+**人工门批量落账(pin 段提案化后的落账方式,由用户显式发起)**:用户拿到 pin 提案清单 → 审核 → 拍板"这 N 条 pin";**LLM 一次性批量落账** = 对用户确认的 N 条,循环调 `python "D:/Downloads/Mc Claude Code Workshop/Mc-emoji/[feature-05-loop-self-improvement]/历史扫描/pin_capture.py" --pin-log "D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.claude/auto-memory/pin/pinned-candidates.jsonl" --platform <claude/codex> --corr ... --ai ... --followup ... --note ...`(N 次)。`pin_capture.py` 文件级 dedup 幂等,重复自动跳过、不报错；中央 sink 缺失/不可写时明确失败，不回退旧 sink。**dedup 按 `ai + corr + followup` 三字段算——followup 措辞差异会导致 hash 不同、可能重复入网**,故人工门审提案时若某条疑似历史已 pin,**以 `ai + corr` 为主核对**、不靠脚本 dedup 兜底。writer/core 仍由 Mc-emoji feature05 单源维护，原始纠正信号统一写入中央 ignored raw lane；这不是跨 repo 自动调用 `$pin` skill。
 
 **一致性约束(堵 temp.md 实证偏差:B 模式下 claude 曾自判跳过、没派 mc-expert)**:
 - 收尾三段**每段预判一句话 + 跳过必给具体理由**,不许"看起来没什么"的套话跳过。

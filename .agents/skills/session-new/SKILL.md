@@ -60,7 +60,7 @@ Codex 侧只产 proposal 到 `.codex/memory-inbox/`，正式 apply 由 Claude `/
 ## Claude-only 机制翻译（接真实 Codex skill，不假装原生等价）
 
 - **`mc-update` 纪律**（母本第 2 步）→ 调真实 `$mc-update` skill（四 lane）。
-- **`pin_capture.py`**（共享纠正捕捞链）→ 收尾链不再自动调 `$pin` skill；pin 段改由 today-core §2.1 产提案清单，落账走人工门（用户审后在共享 sink 所属 repo 内由 LLM 批量写）。standalone 手工 `$pin` 仍由其 repo-local adapter 处理。
+- **`pin_capture.py`**（共享纠正捕捞链）→ 收尾链不再自动调 `$pin` skill；pin 段改由 today-core §2.1 产提案清单，落账走人工门（用户审后由 LLM 显式写中央 ignored raw sink）。standalone 手工 `$pin` 由 user-scope 中央 Codex skill 处理；不得回退 repo-local adapter 或旧 feature05 sink。
 - **AskUserQuestion** → Codex 无原生；决策点输出问题等用户答（停人工门）。
 - **`Task(mc-expert)`** → 先按共同 binding 检查当前 turn native tool surface；有工具才 spawn 只读 sub-agent 并显式读取 `.codex/agents/mc-expert.toml`，无工具写 `BLOCKED_TOOL_UNAVAILABLE`；不是自动 profile 绑定，也不得用 `codex exec` fallback。
 - **Agent Teams** → 当前无同形机制；需要团队拓扑时停人工门，不偷换成单 agent。

@@ -87,7 +87,7 @@ team 清理完（lead 跑完 `Clean up the team`）、本次任务**正常收尾
 3. **去重（方案 a）**：Grep/Read 本会话 `live-candidates.<session>.jsonl`，capture_hook 已抓的剔除。
 4. **派 mc-expert 陪审**：team 已 shutdown，**临时 `@agent`(mc-expert) 一次性**（用完即释，呼应建队执行「陪审不省」）；候选 ≥2 条一次 spawn 全给、逐条判，单条才单发。spawn prompt 五要素 + 红线"只给 PIN/DROP+依据、不复述纠正、不顺势修错、**不附概率分**"见判据指针 §5。
 5. **掉线降级**：mc-expert 零正文 / Connection closed → 重试 1 次 → 仍失败 → 该候选落 `Loops/review-queue.md` 交用户补判（**不硬 pin、不 DROP、不连试 ≥2 次**，细则见判据指针 §4）。
-6. **落账**：只对陪审 PIN 的跑 `pin_capture.py`（`--corr`/`--ai`/`--note`/`[--followup]`）；lead 调用前自校验 fail-loud（陪审缺 PIN/DROP/纠正原文/依据 → 不硬凑参数，见判据指针 §6）；候选为空 → 静默跳过。
+6. **落账**：只对陪审 PIN 的跑中央单写入口：`python "D:/Downloads/Mc Claude Code Workshop/Mc-emoji/[feature-05-loop-self-improvement]/历史扫描/pin_capture.py" --pin-log "D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.claude/auto-memory/pin/pinned-candidates.jsonl" --platform claude --corr ... --ai ... --note ... [--followup ...]`；lead 调用前自校验 fail-loud（陪审缺 PIN/DROP/纠正原文/依据 → 不硬凑参数，见判据指针 §6）；候选为空 → 静默跳过。中央 sink 缺失/不可写时明确失败，不回退旧 sink。
 7. **报告行**：pin/drop/掉线降级任一发生 → 在 session-new 段产出的 plan 里记一行 `pin N / drop M / 降级 K 落 review-queue`。
 
 **一致性约束（堵 B 模式 lead 自判跳过偏差）**：
