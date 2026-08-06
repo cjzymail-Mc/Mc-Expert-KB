@@ -28,6 +28,7 @@
 - [cc-hooks-facts](references/cc-hooks-facts.md) — CC hook 机制事实（StopFailure=observ-only 交互式续不了/真续走 headless `--fallback-model` / UserPromptSubmit exit-2=全局变砖 landmine→launcher 防砖 / stdout 恒空 / settings 不热重载但脚本即时 / **07-03 补权限决策类 hook 拦截语义**：deny 拦 bypass·只收紧不放松·fail-open→exit2·覆写守卫范式）〔核 2026-07-02/07-03, CLI v2.1.193/159, 易过期〕
 - [cc-command-skill-resolution](references/cc-command-skill-resolution.md) — CC command/skill 同名解析（同名时 `/slash` 直达 skill、command 壳成死代码；升级删壳或错开命名 chop→chop-task；today 升 skill 实测推翻「留壳必要」陪审判断）〔Mc-emoji 2026-07-12，易过期〕
 - [claude-codex-memory-difference](references/claude-codex-memory-difference.md) — Claude vs Codex 跨会话 memory 加载机制差异（Claude harness 原生强送达 MEMORY.md 索引 vs Codex 原生只载 AGENTS.md 指令链、local Memories 默认关不读 Claude auto-memory）+ 软指针(候选A)够用 + 别为理论完整提前上 hook 的 5 痛点门槛 + 易踩措辞坑。配 [[dual-tool-single-source]]。〔Mc-emoji 2026-07-19 三路实测，易过期〕
+- [auto-memory-index-hook-convention](references/auto-memory-index-hook-convention.md) — auto-memory 的 MEMORY.md 索引钩子写法规范（钩子=相关性触发器非摘要 / 三类「源XXX」区分 / ★ 承重语义保留 / 订正卡保守保留 / 瘦身配召回阳性对照 / 实测 15854→14248）。配 [[kb-memory-boundary]]·[[claude-codex-memory-difference]]。〔Mc-emoji 2026-07-29 瘦身+陪审，核实 2026-08-05，易过期〕
 
 ## agents/ — KB 自带 subagent
 - [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 只读规划、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
@@ -146,13 +147,25 @@
 - ⏸ **today完整版loop判据.md 继续 defer**（07-19 已 defer）：git 未跟踪中文草稿、不在巡检台账已入清单，本轮主线 inbox 3 条，防 scope 蔓延。
 - 未提交：用户手工 push。
 
+## 2026-08-05 收割轮（仅本 repo inbox · 用户限定「只收割 kb-inbox」）
+
+> 用户限定**只收割本 repo `.claude/auto-memory/` inbox**，不跑源 repo 巡检（场景=最简形态，只过 inbox 候选闸门）。inbox 5 条候选（排除 pin/ raw-signal lane）→ 三重闸门 → 用户拍板收 ①③④、②⑤ 不收。
+
+- ✅ **① reflexes append「判 done_when / 验收项达标前：按字面判据跑阳性对照」**：自己正要写「D#/验收项达标」签注=停，先①标尺核对（拎 done_when 字面原文判据，不取二手结论）②阳性对照（构造会失败的输入真跑）。与「阴性结论需阳性对照」**互补不重**（那条管探针失灵→假阴性，本条管标尺用错+没跑负例→假 PASS）。源 = inbox `proposal-done-when-sign-needs-positive-control`（Mc-emoji double-workflow 首次验收：Claude 静态判 D3 达标、codex 独立复跑负例才抓出缺槽位仍 save+exit 0 假 PASS；mc-expert 陪审高置信 GO）。**诚实标注单 repo 起源、待第二 repo 命中**（判据同 07-23 C2「治标优先」先例：跨 repo 普适判断纪律 + 单 repo 起源先入 reflexes）。
+- ✅ **③ `pipeline-self-check-loop/SKILL.md` append 第 5 条「被测链路含 AI 时：证据防 probe 后篡改」**：被测链路含 AI+工具时「产生了证据文件」≠可信（模型可 probe 后覆写退化内容、runner 只看「有新文件」表面 PASS）。两硬动作：证据通道对模型不可见（hidden+随机名+不进对话）/ 外部 schema 门+链路阳性与语义分离。与 reflexes「阳性对照」互补（指针不复述）。源 = inbox `proposal-pipeline-self-check-ai-proof-evidence`（Mc-emoji feature-05 plan11 + feature-06 plan14 双 feature 命中、Codex 产；mc-expert 陪审高置信 GO）。**⚠️ 落 skill 非 KB 内容层**——属 user-scope skill 母本维护（随 repo 版本化、该进 git）；`.agents/skills/` 不镜像此 skill（双工具 shim 只覆盖 double-workflow 相关 skill），无漂移风险。
+- ✅ **④ 新建 `references/auto-memory-index-hook-convention`**：MEMORY.md 索引钩子写法规范（钩子=相关性触发器非摘要 / 三类「源XXX」区分纯溯源删·频次避坑留 / ★ 承重语义保留 / 订正卡保守保留 / 瘦身配召回阳性对照 / 实测 15854→14248 省≈460 token）。源 = inbox `auto-memory-index-hook-writing-convention`（Mc-emoji 2026-07-29 瘦身+陪审）。去重闸：references/ 零覆盖、kb-memory-boundary 讲分治边界不讲钩子写法=正交不重。标核实 2026-08-05 + 易过期（钩子注入机制随 CC 版本演进，链 [[claude-codex-memory-difference]]）。
+- ⏸ **② 陪审 prompt 禁喂已采信结论 → 不收（留 Mc-emoji auto-memory）**：只在 Mc-emoji double-workflow 验收命中 1 次、reflexes 双 repo 门槛硬不过；本质是 [[self-compliance-probabilistic]] 的调用层补丁（软冗余非确定兜底），留项目层更合身。源 inbox `proposal-jury-prompt-no-feeding-conclusions` 保留在 inbox 待 Mc-emoji 侧处理。
+- ⏸ **⑤ feedback_ppt_selfcheck → 不收**：已被 `pipeline-self-check-loop` skill 2b 视觉自检充分覆盖 + 单 repo + 低频，维持现状（已在 inbox MEMORY.md 记录）。
+- **边界克制**：本轮不扫源 repo（用户限定）；references/ 两个游离中文草稿（收尾loop判据 / today完整版loop判据）维持 defer（07-19/07-23 既有决定，防 scope 蔓延）。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
 
 | 源 repo | 扫描截止(基线) | 上次巡检 | 本轮结论摘要 |
 |---|---|---|---|
-| **本 repo inbox**（`.claude/auto-memory/`） | 2026-07-23 | 2026-07-23 | **07-23 首登**：本轮暴露巡检第一站应是本 repo inbox（非源 repo）→ 已修 KB-update 命令 step 1。扫出 3 条待晋升候选全收：C1(glm-5.2 auto 证据订正/cc-permissions)+C2(治标优先于重构/reflexes)+C3(人工门最小化/principles)。已晋升候选已从 inbox 删除（晋升后留 inbox = 双份漂移，违 kb-memory-boundary 物理隔离）；inbox 仅留 `feedback_ppt_selfcheck` 旧料未动。**纪律**：inbox 里凡还没晋升的每轮都要重新过闸门、别只看新不新 |
+| **本 repo inbox**（`.claude/auto-memory/`） | 2026-08-05 | 2026-08-05 | **08-05 复扫**（用户限定「只收割 kb-inbox」、不扫源 repo）：inbox 5 候选（排除 pin/）→ 收 ①(done_when 阳性对照→reflexes append)+③(pipeline AI 防篡改证据→SKILL.md 第5条)+④(索引钩子写法→references 新建)；不收 ②(陪审禁喂结论→留 Mc-emoji，单 repo 1 命中)+⑤(ppt 自检→已被 skill 覆盖)。①③④ 晋升后已删/回写 inbox（防双份漂移）。**07-23 历史**：本轮暴露巡检第一站应是本 repo inbox → 已修 KB-update step 1。**纪律**：inbox 里凡还没晋升的每轮都要重新过闸门、别只看新不新 |
 | `3rd-ppt-prj` | 2026-07-14 | 2026-07-20 | Stage 0 已深挖；**07-20 复扫**：晚于 07-14 仅 `.git/FETCH_HEAD`(元数据)，过程文件≤06-16，确认无新料。〔历史〕**07-14 复扫**仅 STATE 06-02 触碰(噪声)，过程文件≤06-02 |
 | `[Agent-3 Claude+Codex] Info Classifier` | 2026-07-20 | 2026-07-20 | **07-20 富矿**：07-15~20 双主线=①Codex 端机制适配(hooks/sandbox/auto_review/视觉子进程)②双工具单一真源+project-archive-starter 重建治理。收 T1(单一真源决策)+T7(视觉防幻觉,落 principles)。已否域内(染色/槽位/mapping/移植技法)。**07-14 复扫**(历史)：07-01 一簇 feature/skill 重触碰(域内)，无新 auto-memory，确认无新料 |
 | `[Agent-4] Wu Prj` | 2026-07-14 | 2026-07-20 | **07-20 复扫**：晚于 07-14 的文件=**0 个**（最新停 07-01 的 `.lock`，过程文件全 ≤06-30）。⚠️ **基线滞后提示**：07-14 基线切在该 repo 沉默期之后，06-29/06-30 最后一批 feedback（marker_prefix / deck_split_browextract / keygate_mc_expert_jury）按时间窗本应在更早轮覆盖——若日后怀疑漏收，可回查 06-28~06-30 窗口。本轮无新增可入。**07-14 复扫**(历史)：新增集中 deck/chart 产线域(域内不入)，收单发subagent掉线重试max1(append agent-teams)；〔历史〕富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |

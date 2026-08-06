@@ -1,0 +1,7 @@
+interface:
+  display_name: "Double Coder"
+  short_description: "Codex 双窗口接力 coder，按深度授权 B 模式执行或恢复任务"
+  default_prompt: "Use $double-coder to execute or resume the current repository task in deep-authorization B mode and hand work off to a double-planner."
+
+policy:
+  allow_implicit_invocation: false

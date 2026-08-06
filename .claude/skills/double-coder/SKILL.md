@@ -10,7 +10,7 @@ description: 让 Claude 在当前 Git repo 中担任双窗口接力 coder。用�
 ## Claude 机制适配
 
 - 状态脚本固定为 `$env:USERPROFILE\.agents\double-session-common\double-session-state.ps1`，角色固定为 `coder`。
-- 除 `status/stop` 外，启动或恢复调度前先调用状态脚本 `-Action Config`，读取唯一配置；将 `coder_interval_seconds` 精确换算成整分钟的 Claude `/loop <N>m` 参数。配置读取或校验失败即停，不得使用 skill 内默认值。`max_budget_seconds` 由状态脚本在新 run/新 segment 时读取。
+- 除 `status/stop` 外，启动或恢复调度前先调用状态脚本 `-Action Config`，读取唯一配置；将 `coder_interval_seconds` 精确换算成整分钟的 Claude `/loop <N>m` 参数。配置读取或校验失败即停，不得使用 skill 内默认值。原 session 重新输入 `/double-coder` 时，再用既有绑定调用 `RefreshBudget`；预算未变化为 no-op，变化时从此刻开启一个新 segment。
 - 陪审命中公共协议扳机时，用一次性只读 `Task(mc-expert)`；调用正文必须交齐公共协议规定的四字段。不得建立常驻 teammate。调用失败也不得 `WaitHuman`，须把证据交给 planner。
 - 自主接力中不得调用 `AskUserQuestion`。普通决策直接按公共协议默认顺序自走；真正人工硬门走非阻塞 `WaitHuman`。
 - 周期调度只用 Claude Code 内建 `/loop`，间隔使用本次从配置固化的具体 `<N>m`。job 提示词以唯一标记 `[double-coder]` 开头，并要求执行本 skill 的“单轮调度”；禁止 shell 常驻循环或 `Start-Sleep`。
@@ -18,15 +18,16 @@ description: 让 Claude 在当前 Git repo 中担任双窗口接力 coder。用�
 
 ## 启动
 
-0. 解析 `状态/继续/返工/通过/取消/接管`（兼容原英文入口）。既有本角色 session 的短命令内部使用当前批准编号；全新 session 必须显式 `resume <decision> <human_approval_id>`。裸“继续”不得猜 run 或 takeover；终态拒绝复活。全新 session 发现遗留 `wait_human` 时先显示三选一；只有用户本轮明确选择“取消旧任务并强制初始化”才调用 `ForceInit`。
-1. 调 `Config` 并固化本次 coder loop 间隔；固化当前 repo 绝对路径并生成唯一 `worker_token`。新 run 调 `Init` 时只传 `ExpectedRepo + WorkerToken`，从返回值取得 `run_id` 后立即固化。已有 run/人工恢复则先从 state 固化 `run_id`。此后每个动作都传 `ExpectedRepo / ExpectedRunId / WorkerToken`。普通启动遇有效同角色 token 报 `WORKER_ACTIVE`；可等待租约过期后 Recover，或由用户显式 takeover 立即接管。
-2. 立即执行一次“单轮调度”。
-3. 若仍为 running，注册唯一 `[double-coder]` loop 并报告 job id。
+0. 解析 `状态/继续/返工/通过/取消/接管`（兼容原英文入口）。普通中断下，既有本角色 session 的“继续”只恢复其既有 run/role/token；`wait_human` 下的短命令才内部使用当前批准编号。全新或丢失上下文 session 必须显式 `resume <decision> <human_approval_id>`，裸“继续”不得猜 run、token 或 takeover；终态拒绝复活。
+1. 调 `Config` 并固化本次 coder loop 间隔。已有本角色绑定时复用 repo/run/token；若本轮由 `/double-coder` 重进，调用一次 `RefreshBudget`。只有新 run 才生成 `worker_token` 并调用 `Init`。此后每个动作都传 `ExpectedRepo / ExpectedRunId / WorkerToken`；token 不匹配时报 `WORKER_ACTIVE`，不隐式 takeover。
+2. 用户在原 session 输入“继续”显式恢复时：先查 state；`running` 立即执行单轮，`paused_budget` 用原 token 调 `Recover` 后立即执行单轮。离线过期但 state 仍为 `running` 时，由当前 turn 的检查先落成暂停，再在同次显式恢复里 `Recover`。自动 loop 不得自行续开预算。
+3. 立即执行一次“单轮调度”。
+4. 若仍为 running，注册唯一 `[double-coder]` loop 并报告 job id。
 
 ## 单轮调度
 
 1. 调 `CheckBudget -Role coder`。
-2. `done|cancelled|wait_human|paused_budget`：不得读 `temp.md`；用 `CronList`/`CronDelete` 取消本 session 唯一 `[double-coder]` job。`wait_human` 报告允许的 resume decision；暂停时告诉用户再次启动任一平台 coder。
+2. `done|cancelled|wait_human|paused_budget`：不得读 `temp.md`；用 `CronList`/`CronDelete` 取消本 session 唯一 `[double-coder]` job。`wait_human` 报告允许的 resume decision；预算暂停时保留原 session 绑定，提示在两个原 session 输入“继续”，不得要求新开窗口或换 token。
 3. `running + turn=planner`：结束本轮，只等 state；不得碰 `temp.md`。无论连续等待多少轮都保留本 session 唯一 `[double-coder]` loop。
 4. `running + turn=coder`：完整执行公共协议的 coder 正常轮。安全交棒后若返回 `paused_budget`，立即取消 loop。
 5. coder 永久禁止 `WaitHuman`；失败必须以 `HandoffKind failure + FailureKey` 交给 planner。

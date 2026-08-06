@@ -1,5 +1,5 @@
 {
-  "coder_interval_seconds": 300,
-  "planner_interval_seconds": 600,
-  "max_budget_seconds": 72000
+  "coder_interval_seconds": 3600,
+  "planner_interval_seconds": 3600,
+  "max_budget_seconds": 36000
 }

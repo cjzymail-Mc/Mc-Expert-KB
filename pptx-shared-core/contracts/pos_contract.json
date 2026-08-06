@@ -1,0 +1,13 @@
+{
+  "expected_slide_count": 2,
+  "required_anchors": ["Hello World", "Short v2"],
+  "forbid_duplicate_picture_coords": true,
+  "check_rels_residue": true,
+  "slots": [
+    {"slide": 1, "shape": "Title 1", "kind": "text", "expected": "Hello World"},
+    {"slide": 2, "shape": "Table 1", "kind": "table", "row": 1, "col": 1, "expected": "Alpha"}
+  ],
+  "image_slots": [
+    {"slide": 2, "shape": "Picture 1", "expected_present": true}
+  ]
+}

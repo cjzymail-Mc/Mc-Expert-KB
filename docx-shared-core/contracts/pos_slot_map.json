@@ -1,0 +1,11 @@
+{
+  "anchors": [
+    {"find": "{{TITLE}}", "replace": "Quarterly Summary"},
+    {"find": "{{RED_VALUE}}", "replace": "REPLACED_OK"}
+  ],
+  "slots": [
+    {"id": "red_value_cell", "kind": "red_cell_driven", "table": 1, "row": 1, "col": 0, "value": "REPLACED_OK"},
+    {"id": "perf_table", "kind": "table_insert", "anchor": "Outro line after table.",
+     "headers": ["Metric", "Result"], "rows": [["Alpha", "1.0"], ["Beta", "2.0"]]}
+  ]
+}

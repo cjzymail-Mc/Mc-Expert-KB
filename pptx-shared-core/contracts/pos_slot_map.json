@@ -1,0 +1,10 @@
+{
+  "anchors": [
+    {"find": "{{NAME}}", "replace": "World"},
+    {"find": "{{N}}", "replace": "v2"}
+  ],
+  "slots": [
+    {"slide": 1, "shape": "Title 1", "kind": "text", "expected": "Hello World"},
+    {"slide": 2, "shape": "Table 1", "kind": "table", "row": 1, "col": 1, "expected": "Alpha"}
+  ]
+}

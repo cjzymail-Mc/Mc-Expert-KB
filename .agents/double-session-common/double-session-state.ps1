@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Config', 'Init', 'ForceInit', 'Show', 'CheckBudget', 'Consume', 'Handoff', 'Done', 'WaitHuman', 'ResolveHuman', 'Cancel', 'Recover', 'Takeover')]
+    [ValidateSet('Config', 'GoalContract', 'Init', 'ForceInit', 'Show', 'WaitTurn', 'CheckBudget', 'RefreshBudget', 'Consume', 'Handoff', 'Done', 'WaitHuman', 'ResolveHuman', 'Cancel', 'Recover', 'SafeBootstrapTakeover', 'SafeTakeover', 'Takeover')]
     [string]$Action,
 
     [ValidateSet('coder', 'planner', 'claude', 'codex')]
@@ -26,7 +26,13 @@ param(
 
     [string]$ExpectedRepo = '',
 
-    [string]$ExpectedRunId = ''
+    [string]$ExpectedRunId = '',
+
+    [int]$ObservedSeq = -1,
+
+    [int]$TimeoutSeconds = 0,
+
+    [switch]$CodexJsonEnvelope
 )
 
 Set-StrictMode -Version Latest
@@ -214,6 +220,158 @@ function Assert-RoleTurn {
     }
 }
 
+function Get-TurnWakeEventName {
+    param(
+        [Parameter(Mandatory)][string]$RunId,
+        [Parameter(Mandatory)][string]$WakeRole
+    )
+    $identity = "$repoRoot|$RunId|$WakeRole"
+    return "Local\mc_double_session_wake_$((Get-Sha256 -Text $identity).Substring(0, 32))"
+}
+
+function Send-TurnWakeSignal {
+    param(
+        [Parameter(Mandatory)][string]$RunId,
+        [Parameter(Mandatory)][string]$WakeRole
+    )
+    $wakeEvent = $null
+    try {
+        $createdNew = $false
+        $wakeEvent = [System.Threading.EventWaitHandle]::new(
+            $false,
+            [System.Threading.EventResetMode]::AutoReset,
+            (Get-TurnWakeEventName -RunId $RunId -WakeRole $WakeRole),
+            [ref]$createdNew
+        )
+        [void]$wakeEvent.Set()
+    }
+    catch {
+        # Wake-up is advisory. The configured timeout remains the fail-safe.
+    }
+    finally {
+        if ($null -ne $wakeEvent) { $wakeEvent.Dispose() }
+    }
+}
+
+function Read-WaitTurnState {
+    param(
+        [Parameter(Mandatory)][System.Threading.Mutex]$RepoMutex,
+        [Parameter(Mandatory)][System.Diagnostics.Stopwatch]$Clock,
+        [Parameter(Mandatory)][int]$TimeoutMilliseconds
+    )
+    $remaining = $TimeoutMilliseconds - [int]$Clock.ElapsedMilliseconds
+    if ($remaining -le 0) { return $null }
+
+    $lockTaken = $false
+    try {
+        try {
+            $lockTaken = $RepoMutex.WaitOne($remaining)
+        }
+        catch [System.Threading.AbandonedMutexException] {
+            $lockTaken = $true
+        }
+        if (-not $lockTaken) { return $null }
+        $state = Read-State
+        Assert-RunBinding -State $state
+        return $state
+    }
+    finally {
+        if ($lockTaken) { $RepoMutex.ReleaseMutex() }
+    }
+}
+
+function Test-WaitTurnActionable {
+    param(
+        [Parameter(Mandatory)]$State,
+        [Parameter(Mandatory)][string]$WaitRole,
+        [Parameter(Mandatory)][int]$AfterSeq
+    )
+    $actualSeq = [int]$State.seq
+    if ($actualSeq -lt $AfterSeq) {
+        throw "STATE_SEQ_REGRESSION: expected_at_least=$AfterSeq actual=$actualSeq"
+    }
+    if ($actualSeq -gt $AfterSeq) { return $true }
+    if ([string]$State.status -in @('done', 'cancelled')) { return $true }
+    return [string]$State.status -eq 'running' -and [string]$State.turn -eq $WaitRole
+}
+
+function Write-WaitTurnResult {
+    param(
+        [Parameter(Mandatory)][string]$Result,
+        [Parameter(Mandatory)][System.Diagnostics.Stopwatch]$Clock,
+        [Parameter(Mandatory)]$State,
+        [Parameter(Mandatory)][int]$SpuriousSignals
+    )
+    [pscustomobject]@{
+        wait_result = $Result
+        elapsed_ms = [int]$Clock.ElapsedMilliseconds
+        spurious_signals = $SpuriousSignals
+        state = $State
+    } | ConvertTo-Json -Depth 9
+}
+
+function Invoke-WaitTurn {
+    if (-not $Role) { throw 'ROLE_REQUIRED' }
+    if ([string]::IsNullOrWhiteSpace($ExpectedRepo)) { throw 'EXPECTED_REPO_REQUIRED' }
+    if ([string]::IsNullOrWhiteSpace($ExpectedRunId)) { throw 'EXPECTED_RUN_ID_REQUIRED' }
+    if ($ObservedSeq -lt 0) { throw 'OBSERVED_SEQ_REQUIRED' }
+    if ($TimeoutSeconds -lt 1 -or $TimeoutSeconds -gt 3600) {
+        throw "WAIT_TIMEOUT_OUT_OF_RANGE: expected=1..3600 actual=$TimeoutSeconds"
+    }
+    $expected = [System.IO.Path]::GetFullPath($ExpectedRepo)
+    if ($expected -ne $repoRoot) {
+        throw "REPO_MISMATCH: expected=$expected actual=$repoRoot"
+    }
+
+    $timeoutMilliseconds = $TimeoutSeconds * 1000
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $wakeEvent = $null
+    $repoMutex = $null
+    $lastState = $null
+    $spuriousSignals = 0
+    try {
+        $createdNew = $false
+        $wakeEvent = [System.Threading.EventWaitHandle]::new(
+            $false,
+            [System.Threading.EventResetMode]::AutoReset,
+            (Get-TurnWakeEventName -RunId $ExpectedRunId -WakeRole $Role),
+            [ref]$createdNew
+        )
+        $mutexName = "Local\mc_double_session_$((Get-Sha256 -Text $repoRoot).Substring(0, 24))"
+        $repoMutex = [System.Threading.Mutex]::new($false, $mutexName)
+
+        $lastState = Read-WaitTurnState -RepoMutex $repoMutex -Clock $clock -TimeoutMilliseconds $timeoutMilliseconds
+        if ($null -eq $lastState) {
+            throw 'WAIT_TURN_INITIAL_STATE_TIMEOUT'
+        }
+        if (Test-WaitTurnActionable -State $lastState -WaitRole $Role -AfterSeq $ObservedSeq) {
+            Write-WaitTurnResult -Result 'state_ready' -Clock $clock -State $lastState -SpuriousSignals 0
+            return
+        }
+
+        while ($clock.ElapsedMilliseconds -lt $timeoutMilliseconds) {
+            $remaining = $timeoutMilliseconds - [int]$clock.ElapsedMilliseconds
+            if ($remaining -le 0 -or -not $wakeEvent.WaitOne($remaining)) { break }
+
+            $current = Read-WaitTurnState -RepoMutex $repoMutex -Clock $clock -TimeoutMilliseconds $timeoutMilliseconds
+            if ($null -eq $current) { break }
+            $lastState = $current
+            if (Test-WaitTurnActionable -State $lastState -WaitRole $Role -AfterSeq $ObservedSeq) {
+                Write-WaitTurnResult -Result 'signaled' -Clock $clock -State $lastState -SpuriousSignals $spuriousSignals
+                return
+            }
+            $spuriousSignals++
+        }
+
+        Write-WaitTurnResult -Result 'timeout' -Clock $clock -State $lastState -SpuriousSignals $spuriousSignals
+    }
+    finally {
+        $clock.Stop()
+        if ($null -ne $repoMutex) { $repoMutex.Dispose() }
+        if ($null -ne $wakeEvent) { $wakeEvent.Dispose() }
+    }
+}
+
 function Assert-RunBinding {
     param([Parameter(Mandatory)]$State)
     if ($ExpectedRepo) {
@@ -370,9 +528,65 @@ if ($Action -eq 'Config') {
     exit 0
 }
 
+if ($Action -eq 'GoalContract') {
+    if (-not $Role) { throw 'ROLE_REQUIRED' }
+    if ([string]::IsNullOrWhiteSpace($WorkerToken)) { throw 'WORKER_TOKEN_REQUIRED' }
+    if ([string]::IsNullOrWhiteSpace($ExpectedRepo)) { throw 'EXPECTED_REPO_REQUIRED' }
+    $expected = [System.IO.Path]::GetFullPath($ExpectedRepo)
+    if ($expected -ne $repoRoot) {
+        throw "REPO_MISMATCH: expected=$expected actual=$repoRoot"
+    }
+    $config = Get-DoubleSessionConfig
+    $waitSeconds = if ($Role -eq 'coder') {
+        [int]$config.coder_interval_seconds
+    }
+    else {
+        [int]$config.planner_interval_seconds
+    }
+    $runBinding = if ([string]::IsNullOrWhiteSpace($ExpectedRunId)) { 'PENDING' } else { $ExpectedRunId }
+    $skillPath = Join-Path $env:USERPROFILE ".agents\skills\double-$Role\SKILL.md"
+    $protocolPath = Join-Path $env:USERPROFILE '.agents\double-session-common\protocol.md'
+    $goalContract = @(
+        'DOUBLE_SESSION_GOAL_CONTRACT=v2'
+        "repo=$repoRoot"
+        "run_id=$runBinding"
+        "role=$Role"
+        "worker_token=$WorkerToken"
+        "wait_seconds_at_creation=$waitSeconds"
+        "live_skill=$skillPath"
+        "live_protocol=$protocolPath"
+        'CONTINUATION_BOOTSTRAP=Before every Goal continuation and before every state action, fully re-read live_skill and live_protocol, then call Config. The live files override stale workflow prose in this Goal.'
+        'TOKEN_RULE=worker_token above is the durable source of truth. Reconstruct it from this objective every turn; tool store() is cache only and may be empty after restart.'
+        'RUN_RULE=Reuse repo, role and worker_token exactly. If run_id=PENDING, bind only to the first running or paused_budget run observed in repo; otherwise require the exact run_id.'
+        'RESUME_RULE=An explicit Continue Goal, goal resume, Chinese 继续, or re-entered double skill may Recover paused_budget with the bound token, then immediately recheck state.'
+        'TERMINAL_RULE=Never complete or block this Goal merely for paused_budget, wait_human, the other role turn, unchanged state, or a missing store cache. Complete only for done or cancelled with no newer task.'
+    ) -join [Environment]::NewLine
+    if ($CodexJsonEnvelope) {
+        [ordered]@{
+            envelope       = 'DOUBLE_SESSION_CODEX_GOAL_ENVELOPE=v1'
+            repo           = $repoRoot
+            run_id         = $runBinding
+            role           = $Role
+            worker_token   = $WorkerToken
+            goal_objective = $goalContract
+        } | ConvertTo-Json -Compress
+    }
+    else {
+        $goalContract
+    }
+    exit 0
+}
+
+if ($Action -eq 'WaitTurn') {
+    Invoke-WaitTurn
+    exit 0
+}
+
 $mutexName = "Local\mc_double_session_$((Get-Sha256 -Text $repoRoot).Substring(0, 24))"
 $repoMutex = [System.Threading.Mutex]::new($false, $mutexName)
 $lockTaken = $false
+$wakeRoles = [System.Collections.Generic.List[string]]::new()
+$wakeRunId = ''
 try {
 try {
     $lockTaken = $repoMutex.WaitOne(0)
@@ -516,13 +730,43 @@ switch ($Action) {
         $state | ConvertTo-Json -Depth 8
     }
 
+    'RefreshBudget' {
+        if (-not $Role) { throw 'ROLE_REQUIRED' }
+        $state = Read-State
+        Assert-RunBinding -State $state
+        if ($state.status -notin @('running', 'paused_budget')) {
+            throw "REFRESH_BUDGET_NOT_ALLOWED: $($state.status)"
+        }
+        Assert-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
+        $config = Get-DoubleSessionConfig
+        $nextBudgetSeconds = [int]$config.max_budget_seconds
+        if ([int]$state.budget_seconds -eq $nextBudgetSeconds) {
+            $state | ConvertTo-Json -Depth 8
+            break
+        }
+        Start-Mutation -State $state -Name 'RefreshBudget' -MutationRole $Role -Token $WorkerToken
+        Set-NewBudgetSegment -State $state -Seconds $nextBudgetSeconds
+        Set-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
+        Complete-Mutation -State $state
+        Write-State -State $state
+        $state | ConvertTo-Json -Depth 8
+    }
+
     'Consume' {
         if (-not $Role) { throw 'ROLE_REQUIRED' }
         $state = Read-State
         Assert-RunBinding -State $state
         Assert-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
-        if ((Test-LastActionReplay -State $state -Name 'Consume' -ActionRole $Role -Token $WorkerToken) -and
-            [System.IO.File]::Exists($tempPath) -and ([System.IO.FileInfo]::new($tempPath)).Length -eq 0) {
+        if (Test-LastActionReplay -State $state -Name 'Consume' -ActionRole $Role -Token $WorkerToken) {
+            Assert-RoleTurn -State $state -ExpectedRole $Role
+            if (-not [System.IO.File]::Exists($tempPath)) { throw 'TEMP_NOT_FOUND' }
+            if ([int]$state.last_action_seq -ne [int]$state.seq) {
+                throw "CONSUME_REPLAY_SEQ_MISMATCH: last_action_seq=$($state.last_action_seq) seq=$($state.seq)"
+            }
+            $messageSequence = if ($state.PSObject.Properties.Name -contains 'message_seq') { [int]$state.message_seq } else { -1 }
+            if ($messageSequence -ne [int]$state.seq) {
+                throw "CONSUME_REPLAY_MESSAGE_SEQ_MISMATCH: message_seq=$messageSequence seq=$($state.seq)"
+            }
             Assert-FrozenTask -State $state
             Assert-MessageSnapshot -State $state
             [System.IO.File]::ReadAllText($messagePath, $utf8)
@@ -581,6 +825,8 @@ switch ($Action) {
         Assert-RunBinding -State $state
         Assert-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
         if (Test-LastActionReplay -State $state -Name 'Handoff' -ActionRole $Role -Token $WorkerToken) {
+            $wakeRunId = [string]$state.run_id
+            [void]$wakeRoles.Add([string]$state.turn)
             $state | ConvertTo-Json -Depth 8
             break
         }
@@ -637,6 +883,8 @@ switch ($Action) {
         Complete-Mutation -State $state
         Set-LastAction -State $state -Name 'Handoff' -ActionRole $Role -Token $WorkerToken
         Write-State -State $state
+        $wakeRunId = [string]$state.run_id
+        [void]$wakeRoles.Add($To)
         $state | ConvertTo-Json -Depth 8
     }
 
@@ -646,6 +894,8 @@ switch ($Action) {
         Assert-RunBinding -State $state
         Assert-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
         if (Test-LastActionReplay -State $state -Name 'Done' -ActionRole $Role -Token $WorkerToken) {
+            $wakeRunId = [string]$state.run_id
+            [void]$wakeRoles.Add('coder')
             $state | ConvertTo-Json -Depth 8
             break
         }
@@ -665,6 +915,8 @@ switch ($Action) {
         Complete-Mutation -State $state
         Set-LastAction -State $state -Name 'Done' -ActionRole $Role -Token $WorkerToken
         Write-State -State $state
+        $wakeRunId = [string]$state.run_id
+        [void]$wakeRoles.Add('coder')
         $state | ConvertTo-Json -Depth 8
     }
 
@@ -831,6 +1083,93 @@ switch ($Action) {
         $state | ConvertTo-Json -Depth 8
     }
 
+    'SafeBootstrapTakeover' {
+        if ($Role -ne 'coder') { throw 'SAFE_BOOTSTRAP_TAKEOVER_CODER_ONLY' }
+        if ([string]::IsNullOrWhiteSpace($ExpectedRepo)) { throw 'EXPECTED_REPO_REQUIRED' }
+        if ([string]::IsNullOrWhiteSpace($ExpectedRunId)) { throw 'EXPECTED_RUN_ID_REQUIRED' }
+        $state = Read-State
+        Assert-RunBinding -State $state
+        if ([string]::IsNullOrWhiteSpace($WorkerToken)) { throw 'WORKER_TOKEN_REQUIRED' }
+        $messageSequence = if ($state.PSObject.Properties.Name -contains 'message_seq') { [int]$state.message_seq } else { -1 }
+        $coderTokenHash = [string]$state.worker_token_hashes.coder
+        $plannerTokenHash = [string]$state.worker_token_hashes.planner
+        $safeBoundary =
+            [string]$state.status -eq 'running' -and
+            [string]$state.turn -eq 'coder' -and
+            [int]$state.seq -eq 0 -and
+            [string]$state.phase -eq 'ready' -and
+            [string]::IsNullOrWhiteSpace([string]$state.last_action) -and
+            [string]::IsNullOrWhiteSpace([string]$state.last_action_role) -and
+            [string]::IsNullOrWhiteSpace([string]$state.last_action_token_sha256) -and
+            [int]$state.last_action_seq -eq -1 -and
+            $messageSequence -eq 0 -and
+            -not [string]::IsNullOrWhiteSpace($coderTokenHash) -and
+            [string]::IsNullOrWhiteSpace([string]$state.mutation_action) -and
+            [string]::IsNullOrWhiteSpace([string]$state.mutation_role) -and
+            [string]::IsNullOrWhiteSpace([string]$state.mutation_token_sha256) -and
+            [string]::IsNullOrWhiteSpace($plannerTokenHash)
+        if (-not $safeBoundary) {
+            throw "SAFE_BOOTSTRAP_TAKEOVER_BOUNDARY_REQUIRED: status=$($state.status) turn=$($state.turn) seq=$($state.seq) last_action=$($state.last_action) last_role=$($state.last_action_role) last_seq=$($state.last_action_seq) message_seq=$messageSequence phase=$($state.phase)"
+        }
+        Assert-FrozenTask -State $state
+        Assert-MessageSnapshot -State $state
+        if ([string]$state.task_sha256 -ne [string]$state.message_sha256) {
+            throw "SAFE_BOOTSTRAP_TAKEOVER_SNAPSHOT_MISMATCH: task=$($state.task_sha256) message=$($state.message_sha256)"
+        }
+        if (-not [System.IO.File]::Exists($tempPath) -or ([System.IO.FileInfo]::new($tempPath)).Length -eq 0) {
+            throw 'SAFE_BOOTSTRAP_TAKEOVER_TASK_BODY_MISSING'
+        }
+        $tempHash = Get-FileSha256 -Path $tempPath
+        if ($tempHash -ne [string]$state.message_sha256) {
+            throw "SAFE_BOOTSTRAP_TAKEOVER_TASK_MISMATCH: expected=$($state.message_sha256) actual=$tempHash"
+        }
+        Start-Mutation -State $state -Name 'SafeBootstrapTakeover' -MutationRole 'coder' -Token $WorkerToken
+        Set-WorkerLease -State $state -LeaseRole 'coder' -Token $WorkerToken
+        $state.updated = [DateTimeOffset]::Now.ToString('o')
+        Complete-Mutation -State $state
+        Write-State -State $state
+        $state | ConvertTo-Json -Depth 8
+    }
+
+    'SafeTakeover' {
+        if (-not $Role) { throw 'ROLE_REQUIRED' }
+        $state = Read-State
+        Assert-RunBinding -State $state
+        if ([string]::IsNullOrWhiteSpace($WorkerToken)) { throw 'WORKER_TOKEN_REQUIRED' }
+        if ($state.status -notin @('running', 'paused_budget')) {
+            throw "SAFE_TAKEOVER_NOT_ALLOWED: $($state.status)"
+        }
+        if ([string]$state.turn -ne $Role) {
+            throw "SAFE_TAKEOVER_NOT_ROLE_TURN: expected=$Role actual=$($state.turn)"
+        }
+        $otherRole = if ($Role -eq 'coder') { 'planner' } else { 'coder' }
+        $messageSequence = if ($state.PSObject.Properties.Name -contains 'message_seq') { [int]$state.message_seq } else { -1 }
+        $safeBoundary =
+            [string]$state.phase -eq 'ready' -and
+            [string]$state.last_action -eq 'Handoff' -and
+            [string]$state.last_action_role -eq $otherRole -and
+            [int]$state.last_action_seq -eq [int]$state.seq -and
+            $messageSequence -eq [int]$state.seq
+        if (-not $safeBoundary) {
+            throw "SAFE_TAKEOVER_BOUNDARY_REQUIRED: turn=$($state.turn) seq=$($state.seq) last_action=$($state.last_action) last_role=$($state.last_action_role) last_seq=$($state.last_action_seq) message_seq=$messageSequence phase=$($state.phase)"
+        }
+        Assert-FrozenTask -State $state
+        Assert-MessageSnapshot -State $state
+        if (-not [System.IO.File]::Exists($tempPath) -or ([System.IO.FileInfo]::new($tempPath)).Length -eq 0) {
+            throw 'SAFE_TAKEOVER_HANDOFF_BODY_MISSING'
+        }
+        $tempHash = Get-FileSha256 -Path $tempPath
+        if ($tempHash -ne [string]$state.message_sha256) {
+            throw "SAFE_TAKEOVER_HANDOFF_MISMATCH: expected=$($state.message_sha256) actual=$tempHash"
+        }
+        Start-Mutation -State $state -Name 'SafeTakeover' -MutationRole $Role -Token $WorkerToken
+        Set-WorkerLease -State $state -LeaseRole $Role -Token $WorkerToken
+        $state.updated = [DateTimeOffset]::Now.ToString('o')
+        Complete-Mutation -State $state
+        Write-State -State $state
+        $state | ConvertTo-Json -Depth 8
+    }
+
     { $_ -in @('Recover', 'Takeover') } {
         if (-not $Role) { throw 'ROLE_REQUIRED' }
         $state = Read-State
@@ -841,7 +1180,13 @@ switch ($Action) {
         $leaseExpired = [string]::IsNullOrWhiteSpace($deadline) -or
             ([DateTimeOffset]::Now -ge [DateTimeOffset]::Parse($deadline, [Globalization.CultureInfo]::InvariantCulture))
         $explicitTakeover = $Action -eq 'Takeover' -and $HumanApprovalId -eq "takeover:$($state.run_id)"
-        if (-not $leaseExpired -and -not $explicitTakeover -and [string]$state.worker_token_hashes.$Role -ne (Get-Sha256 -Text $WorkerToken)) { throw 'WORKER_ACTIVE' }
+        $storedTokenHash = [string]$state.worker_token_hashes.$Role
+        $presentedTokenHash = Get-Sha256 -Text $WorkerToken
+        $tokenMatches =
+            -not [string]::IsNullOrWhiteSpace($storedTokenHash) -and
+            $storedTokenHash -eq $presentedTokenHash
+        if ($Action -eq 'Recover' -and -not $tokenMatches) { throw 'RECOVER_TOKEN_MISMATCH' }
+        if ($Action -eq 'Takeover' -and -not $leaseExpired -and -not $explicitTakeover -and -not $tokenMatches) { throw 'WORKER_ACTIVE' }
         Start-Mutation -State $state -Name $Action -MutationRole $Role -Token $WorkerToken
         if ($Action -eq 'Recover' -and $state.status -eq 'paused_budget') {
             $config = Get-DoubleSessionConfig
@@ -859,4 +1204,7 @@ switch ($Action) {
 finally {
     if ($lockTaken) { $repoMutex.ReleaseMutex() }
     $repoMutex.Dispose()
+}
+foreach ($wakeRole in @($wakeRoles | Select-Object -Unique)) {
+    Send-TurnWakeSignal -RunId $wakeRunId -WakeRole $wakeRole
 }

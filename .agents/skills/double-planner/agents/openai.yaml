@@ -1,7 +1,7 @@
 interface:
   display_name: "Double Planner"
-  short_description: "Codex 可先启动，每 10 分钟评审 Claude，单班最长 3 小时"
-  default_prompt: "Use $double-planner before or after /double-coder to wait for initialization and review Claude every 10 minutes for up to three hours."
+  short_description: "Codex 双窗口接力 planner，按配置等待并审核 coder 真实成果"
+  default_prompt: "Use $double-planner to wait for initialization and review evidence from a paired Claude or Codex coder on the configured schedule."
 
 policy:
   allow_implicit_invocation: false
