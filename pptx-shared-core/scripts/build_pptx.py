@@ -103,7 +103,13 @@ def _check_blocked(path, label, ledger_path):
 
 
 def replace_anchors_longest_first(prs, anchors):
-    """anchors: list[{find:str, replace:str}]. Replace longest 'find' first."""
+    """anchors: list[{find:str, replace:str}]. Longest 'find' first.
+
+    Run-level replace first per paragraph; if a paragraph yields zero hits it
+    degrades to paragraph-level (concat runs -> replace -> write runs[0], blank
+    the rest). Mirrors build_docx.py so cross-run anchors (e.g. project name
+    split across runs in a header) are handled instead of silently missed.
+    """
     pending = sorted(anchors, key=lambda a: len(a["find"]), reverse=True)
     applied = []
     for a in pending:
@@ -116,10 +122,19 @@ def replace_anchors_longest_first(prs, anchors):
                     continue
                 tf = sh.text_frame
                 for para in tf.paragraphs:
+                    run_hit = 0
                     for run in para.runs:
                         if find in run.text:
                             run.text = run.text.replace(find, repl)
-                            hits += 1
+                            run_hit += 1
+                    if run_hit == 0 and find in para.text:
+                        full = para.text.replace(find, repl)
+                        if para.runs:
+                            para.runs[0].text = full
+                            for extra in para.runs[1:]:
+                                extra.text = ""
+                            run_hit += 1
+                    hits += run_hit
         applied.append({"find": find, "replace": repl, "hits": hits})
     return applied
 
@@ -259,6 +274,24 @@ def main() -> int:
     anchor_results = replace_anchors_longest_first(prs, anchors)
     slot_results = fill_slots(prs, slots)
     image_results = replace_image(prs, image_slots) if image_slots else []
+
+    # fail-protect: re-scan in-memory text for any anchor find-string that the
+    # pre-check accepted but the replace pass could not actually remove. Closes
+    # the silent-fake-BUILT hole (pre-check uses paragraph text, replace touched
+    # runs). Abort BEFORE save.
+    out_text_after = ""
+    for slide in prs.slides:
+        for sh in slide.shapes:
+            if sh.has_text_frame:
+                out_text_after += sh.text_frame.text + "\n"
+    residual = [a["find"] for a in anchors if a["find"] in out_text_after]
+    if residual:
+        print(json.dumps({"status": "BUILD_FAIL",
+                          "reason": "anchor find-string still present after replace (silent miss blocked)",
+                          "residual": residual,
+                          "anchor_hits": [{"find": r["find"], "hits": r["hits"]} for r in anchor_results]},
+                         ensure_ascii=False))
+        return 1
 
     prs.save(args.out)
 
