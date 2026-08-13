@@ -25,7 +25,7 @@ $stateTool = Join-Path $commonRoot 'double-session-state.ps1'
 pwsh -NoProfile -File $stateTool -Action Show
 ```
 
-支持：`Config / GoalContract / Init / ForceInit / Show / WaitTurn / CheckBudget / RefreshBudget / Consume / Handoff / Done / WaitHuman / ResolveHuman / Cancel / Recover / SafeBootstrapTakeover / SafeTakeover / Takeover`。状态只能由脚本原子写入，模型不得手改。
+支持：`Config / BootstrapProbe / ValidateTask / ConsumeDraft / CommitContract / ArchiveRun / GoalContract / Init / ForceInit / Show / WaitTurn / CheckBudget / RefreshBudget / Consume / Handoff / RecordGateResult / Done / WaitHuman / ResolveHuman / Cancel / Recover / SafeBootstrapTakeover / SafeTakeover / Takeover`。状态只能由脚本原子写入，模型不得手改。
 
 ## 用户可配置参数
 
@@ -39,16 +39,89 @@ pwsh -NoProfile -File $stateTool -Action Show
 
 调度启动时把对应检查间隔固化到本次 Goal/loop，作为最长兜底等待；支持 `WaitTurn` 的 adapter 可在合法交棒信号后提前复查。新 run 或新预算 segment 从配置读取预算并写入 state 作为运行时快照。普通运行中当前 segment 仍保持冻结；用户修改 JSON 后，在原同角色 session 重新输入对应 double 入口时调用 `RefreshBudget`：仅当 `max_budget_seconds` 确实变化才从调用时刻开启新 segment，保留 `run_id/turn/seq`、原 Goal/loop 与 `worker_token`；另一窗口随后重复调用因预算值已相同而 no-op，不重复刷新 deadline。检查间隔在各自入口重进时重新固化。`status/stop` 不依赖配置读取，配置写坏后仍可查看或终止现有 run。
 
+## vNext 启动探针与合同准备
+
+`BootstrapProbe` 是只读热路径：一次返回配置、分段计时、live state 分类，以及在**没有 active state** 时的 `temp.md` 长度、时间、哈希、合同标记、结构校验和推荐路由。active `running|paused_budget|wait_human` 下不得读取 `temp.md`，返回 `RESUME_RUN|WAIT_HUMAN_DECISION`。其余路由为：
+
+- `TASK_DRAFT_EMPTY`：没有可准备的草稿，零 Goal/loop/state；
+- `PREPARE_DRAFT`：无 state 或已归档终态下的零散需求；
+- `CONTRACT_READY`：合同 marker 与结构均合格，不重写；
+- `TASK_PREFLIGHT_REQUIRED`：有 marker 但结构缺项；
+- `TERMINAL_ARCHIVE_THEN_PREPARE`：先 `ArchiveRun`，再按 `terminal_next_route` 处理；
+- `TERMINAL_NO_NEW_TASK`：终态后没有更新的新任务。
+
+planner 只有在 `PREPARE_DRAFT` 时调用 `ConsumeDraft`；该动作在同一 repo mutex 内读取、立即清空并验证长度为 0，成功返回前禁止分析正文或调用其他工具。planner 完成语义整理后把合同写入 `temp.md`，再调用 `CommitContract`；后者机械校验并原子提交当前正文，返回 `prepared_task_sha256`。`CONTRACT_READY` 直接使用探针返回的 task hash，不重写合同。终态新任务必须先 `ArchiveRun`；归档幂等写入当前目标 repo 的 `team-progress/double-workflow/<time>-<run_id>.md`，只含脱敏 Markdown，不含 token hash、lease 或批准编号。
+
+planner 的 kickoff 只负责语义整理，不调用 `Init`，不创建 active state。只有 coder 在 `BootstrapProbe=CONTRACT_READY`、当前 `temp.md` hash 与 `prepared_task_sha256` 一致、`ValidateTask.valid=true` 时才可 `Init`。planner kickoff 耗时、coder init 耗时与 resume 耗时分开记录，不把语义整理算进 coder init。
+
+### `DOUBLE_TASK_CONTRACT=v1` 机械格式
+
+合同按下列顺序写，字段值不得用空占位；JSON 字段必须是单行合法 JSON。`original_request_json` 保存用户原文，`original_request_sha256` 是对 JSON 解码后原文的 SHA-256。每个 `done_when` 都必须写失败语义，避免只写成功口号。
+
+```markdown
+DOUBLE_TASK_CONTRACT=v1
+
+## original_request
+original_request_sha256: <64 lowercase hex>
+original_request_json: "<JSON escaped raw request>"
+
+## authority
+target_repo: <absolute repo path>
+authority_sources: ["<live source>"]
+
+## terminal_state
+result_state: <stable end state>
+
+## scope
+in_scope: ["..."]
+out_of_scope: ["..."]
+read_forbidden: ["..."]
+write_forbidden: ["..."]
+
+## guardrails
+red_lines: ["destructive_or_irreversible", "plaintext_external_delivery", "two_same_failures", "sealed_decision_override"]
+human_gates: ["..."]
+authorization_boundary: ["..."]
+
+## checkpoints
+- id: C1
+  depends_on: none
+  claim: <checkpoint result>
+  verification: <independent check>
+
+## done_when
+- id: D1
+  claim: <result property>
+  verification: <command/file/query>
+  expected: <observable expected result>
+  failure_case: <what proves failure>
+
+## runtime
+planner_runtime: <claude-native|codex-native|codex-glm|claude-glm|other|unknown>
+review_gate: <planner_only|planner_plus_mc_expert>
+runtime_evidence: <first-hand evidence or provider_not_proven>
+```
+
+永久冻结项为：`terminal_state`、`authority`、`scope`、`guardrails` 与全局 `done_when`。检查点顺序和验证命令可在交接中版本化，但不得扩大范围或降低验收边界。planner 准备合同时保留原始需求，只在缺用户独有事实或存在会改变范围、风险、产物的重大分叉时提出最少问题；可从 repo 核实的事实自行读取。合同完成前不进入等待。
+
+在 kickoff、恢复、检查点切换、范围变化、关键交棒和最终验收时回答三问：当前动作服务哪个检查点/未满足项；是否越过 out-of-scope/forbidden；实现、文档和证据是否一致。普通同检查点轮次只记录“无变化”，不在每次 Consume 重复长文。
+
+## 运行时与最终双门
+
+runtime 只接受一手、稳定的当前平台 model/provider 证据；没有稳定 provider 字段或无法证明原生时必须记 `unknown`。有效门取 planner 与 coder 两端更严格者：两端都能证明为 `claude-native|codex-native` 才是 `planner_only`；任一端为 GLM、other 或 unknown 都是 `planner_plus_mc_expert`，执行中不得降级。
+
+planner 对冻结 `done_when` 逐条独立取证；报告、自述和 docstring 只算二手。可靠失败、缺失即中止和 fail-closed 判据必须构造反例真跑；证据状态只用 `PASS_DYNAMIC / STATIC_ONLY / FAIL / BLOCKED`，`STATIC_ONLY` 不得 Done。候选 PASS 后先调用 `RecordGateResult -ReviewGateActor planner -ReviewGateResult pass`；双门时再以只给原始证据、不喂 planner 预判的方式调用一次 `mc-expert`，然后记录其结果。`Done` 机械要求 planner pass；双门还要求 mc-expert pass。REWORK/FAIL/BLOCKED、陪审不可用或证据不全不得降级。相同 `ReviewFailureKey` 的第二次 transport failure 由 state 机械转入 `wait_human` 两连失熔断。
+
 ## 共同不变量
 
-1. 启动前把非空初始任务写入 repo 根 `temp.md`；只有 coder 可以调用 `Init` 创建新 run。既有 run 的轻量恢复使用原 session 的 `Recover`，不重复 `Init`。
+1. 用户可只把非空零散需求写入 repo 根 `temp.md`，先由 planner 在无 active state 时准备并冻结 `DOUBLE_TASK_CONTRACT=v1`；只有 coder 可以调用 `Init` 创建新 run。既有 run 的轻量恢复使用原 session 的 `Recover`，不重复 `Init`。
 2. 等待方只查看 state；`turn` 不属于自己时不得读取、清空或分析 `temp.md`。
 3. 消费必须调用 `Consume`，让“校验冻结任务与 message snapshot → 读取 temp → 立即写空 → 验证长度为 0”在同一 repo 互斥锁内完成；成功返回前不得分析正文或调用其他工具。同 token 对已提交 `Consume` 的重试必须核验 `last_action_seq/message_seq/task/message` 后返回同一 `.copilot-message.md`，不重复推进状态；即使当前角色已把未交棒草稿写入非空 `temp.md`，也绝不能再次消费或清空该草稿。
 4. 生产者先写完整正文并验非空，再 `Handoff` 或 `Done`。两者在同一 repo 互斥锁内先把正文原子落到 `.copilot-message.md`，记录 `message_sha256/message_seq`，再翻转 state。coder 只能交给 planner，planner 只能交给 coder，只有 planner 可以 `Done`。
 5. 每轮所有者先 `CheckBudget`。达到当前 segment 从配置冻结的预算后转 `paused_budget`；若在工作中到期，先完成安全交棒再暂停。普通自动调度看到过期只暂停，不自行续开预算。用户在原 session 显式选择 Continue Goal、执行 `/goal resume` 或输入“继续”后，入口立即检查；若为 `paused_budget`，用原 token 调 `Recover`，从恢复时刻按当前配置开启下一 segment。若离线期间仍显示 `running` 但 deadline 已过，则先由当前 turn 的角色 `CheckBudget` 落成暂停，再在同次显式恢复中 `Recover`。该转换保留 `run_id`、`turn`、`seq`、冻结任务与 `temp.md`。
 6. `paused_budget` 是同一 run 的可恢复暂停态，不是终态。Claude 原 session 复用 loop 上下文；Codex v2 Goal 从 objective 的 `worker_token=` 行恢复原绑定，不能依赖工具进程内的临时 `store()`。等待方只查 state、不得读 `temp.md`，恢复方成功 `Recover` 后两边回到正常轮次。历史 Goal 若未持久化 token，Continue Goal 不能无中生有恢复它，必须按下述兼容边界处理。
 7. `done|cancelled|wait_human` 后禁止继续消费或修改任务产物。`wait_human` 是可恢复人工门，不是新任务：保留 `run_id`、冻结任务、`resume_turn` 与允许决议；只允许 `ResolveHuman` 原 run 恢复或 `Cancel` 终止。真正终态会记录 `temp.md` 哈希；新 run 要求 `temp.md` 非空、哈希已变化且修改时间晚于 state 的 `updated`，旧最终报告不得冒充新任务。v2 旧终态没有哈希时只用时间戳兼容。
-8. 状态机使用 `coder|planner`。为在途旧 worker 暂时接受 `claude|codex` 参数别名并映射旧 turn；新写入升级为 v5，v4 在首次合法写入时惰性迁移并新增 `failure_ledger`。
+8. 状态机使用 `coder|planner`。为在途旧 worker 暂时接受 `claude|codex` 参数别名并映射旧 turn；新写入升级为 v6，旧 state 在首次合法写入时惰性迁移并补 `failure_ledger`、runtime 与 review gate 字段。
 9. v4 每个 run 固化 `owner_repo`；调度器固化 `ExpectedRepo + ExpectedRunId`，所有读取任务、temp、message 前先校验。漂移时报 `REPO_MISMATCH` 或 `RUN_MISMATCH`，拒绝继续。
 10. 每个活跃角色窗口生成唯一 `worker_token`；state 只保存 token 的 SHA-256，不得通过 `Show` 泄漏原 token。Claude 把原 token 保留在原 loop/session 上下文；Codex 必须调用 `GoalContract`，把其完整 v2 输出逐字作为 Goal objective，使 token 与 repo/run/role 一起持久化。`store()` 只能是缓存。状态动作续租 `worker_lease_deadline`；第二个同角色 token 只得 `WORKER_ACTIVE`。宽松 `Takeover` 仍是人工应急能力，不是日常恢复主路径。
 13. `GoalContract` 不改 state，只生成轻量、可持久化的 Codex Goal v2 objective。每次 Goal continuation 必须先按 objective 重新完整读取 live skill、公共 protocol 与 Config，之后才能碰 state；当前 live 文件覆盖 Goal 内旧流程文字。Goal 只有无新任务的 `done|cancelled` 才完成，不能因预算暂停、人工门、对方轮次、状态未变化或临时缓存为空而 `complete|blocked`。
@@ -93,9 +166,9 @@ coder 采用深度授权 B 模式，但不调用 `/free` 或 `$free`，也不运
 
 planner 只审核，不替 coder 修改任务产物：
 
-1. planner 入口先固化 repo 与配置中的检查间隔并建立本平台原生调度。`state` 不存在时立即进入“预启动监视”：不虚构或绑定 `run_id`，按配置间隔复查，直到 coder `Init` 后自动绑定新 run。首次只报告“已进入预启动等待；将在配置间隔后自动复查，无需再次输入 planner 启动指令”，不得直接退出。
-2. 全新 planner session 看到遗留 `wait_human` 时，不重复制造三选一人工门、不绑定旧 `run_id`、不调用 `ForceInit`；只用 `Show -ExpectedRepo` 观察并按配置间隔复查，等待 coder `ResolveHuman` 或 `ForceInit`。已经绑定该 run 的 planner 同样保持等待，但保留旧绑定。若 coder `ForceInit` 后新 state 的 `replaced_run_id` 精确等于旧绑定且 `replaced_status=wait_human`，允许自动改绑新 `run_id`；其他 `RUN_MISMATCH` 仍须 fail-loud。
-3. 无新任务的 `done|cancelled` 才结束 planner 调度。终态之后出现非空、哈希不同且时间更新的 `temp.md` 时，清除旧 run 绑定并进入预启动监视，等待 coder `Init`；只能查长度、`LastWriteTimeUtc` 和文件哈希，不得读取正文。
+1. planner 入口先调用 `BootstrapProbe`。无 state 时按路由处理：零散需求走 `ConsumeDraft → 语义 KO → 写 temp → CommitContract`；合格合同直接复用；空草稿或结构缺项按错误码返回，零 Goal/loop/state。拿到 `prepared_task_sha256` 后才建立 PENDING Goal/loop 并进入预启动监视；不虚构或绑定 `run_id`，按配置间隔复查，直到 coder `Init` 后自动绑定新 run。首次只报告“合同已准备，正在等待 coder Init”，不得直接退出。
+2. 全新 planner session 且没有匹配的本角色持久绑定时，若 `BootstrapProbe` 返回 `RESUME_RUN|WAIT_HUMAN_DECISION`，先只展示旧 run 的 `run_id/status/turn/updated/reason`，让用户明确选择：`恢复旧任务 / 放弃旧任务并归档 / 保留现场并退出`。不得静默把新 session 带回旧 run，也不得为判断选择而读取 `temp.md`。选择恢复时只走既有恢复、等待与 takeover 边界；缺原 session/token 时如实报告。只有用户本轮明确选择放弃后，才调用现有 `Cancel -ExpectedRepo <repo> -ExpectedRunId <run>`，成功后立即调用幂等 `ArchiveRun`；归档失败即停，不手改 state、不调用 `ForceInit`。取消前已经写入 `temp.md` 的内容会被终态哈希视为旧现场，planner 不得自动消费或搬运；必须在 `Cancel → ArchiveRun` 完成后提示用户重新写入新需求（内容哈希变化且修改时间更晚），再重进 planner。已有本角色绑定的 planner 仍按旧 run 正常恢复或等待；若 coder `ForceInit` 后新 state 的 `replaced_run_id` 精确等于旧绑定且 `replaced_status=wait_human`，允许自动改绑新 `run_id`，其他 `RUN_MISMATCH` 仍须 fail-loud。
+3. 无新任务的 `done|cancelled` 才结束 planner 调度。终态之后出现非空、哈希不同且时间更新的 `temp.md` 时，先幂等 `ArchiveRun`，再按 `terminal_next_route` 复用合同或完成 KO，之后清除旧 run 绑定并进入预启动监视。归档失败时不得清空新需求、覆盖旧 task/state/message。`running|paused_budget|wait_human` 下不得为 KO 读取或改写 `temp.md`。
 4. `wait_human` 时保持原生等待调度，只查看 state，等待合法控制入口；不得读取或清空 `temp.md`。`paused_budget` 时停止自动续轮但保留原 session 绑定，等待用户在原窗口显式“继续”并 `Recover`；不得要求新开 planner。
 5. `running + turn=coder` 时等待；`running + turn=planner` 时先 `CheckBudget -Role planner`，再 `Consume -Role planner`。
 6. **审核自主阶梯**：读取冻结任务与 coder 交接后，依次执行，不得跳步直接 REWORK 或 `WaitHuman`：
@@ -105,7 +178,7 @@ planner 只审核，不替 coder 修改任务产物：
    4. 只有 coder 能补证据或做定向修复时，才发 REWORK；
    5. 只有命中共用段第 4 条允许的人工门，才进入 `WaitHuman`。
 7. `REWORK`：写可执行意见、验非空、`Handoff -Role planner -To coder`。每份 REWORK 必须包含：稳定阻塞点编号 `B-xxx`；实际观察到的事实；缺少的证据或未满足的 `done_when`；coder 下一步具体取证/修复动作；验收方式；允许修改范围；当前 `attempt 1/2` 或 `attempt 2/2`。同时续传三个累积清单，不得以“再看看”代替可执行指令。
-8. `PASS`：只有整个冻结任务的 `done_when` 均有实际证据，且剩余 `PENDING_HUMAN_NONBLOCKING` 确认不阻断验收时，才写最终证据并一次性汇报累积的自主裁决与待人工事项，验非空后 `Done -Role planner`。任何阻断 `done_when` 的待人工事项都不得以清单形式带过或伪装成 `PASS`。
+8. `PASS`：只有整个冻结任务的 `done_when` 均有实际证据，且剩余 `PENDING_HUMAN_NONBLOCKING` 确认不阻断验收时，才写最终证据并一次性汇报累积的自主裁决与待人工事项。先记录 planner gate；有效门为双门时再完成独立 `mc-expert` gate。两门满足并验非空后才 `Done -Role planner`。任何阻断 `done_when` 的待人工事项都不得以清单形式带过或伪装成 `PASS`。
 9. 第一次收到某 `failure_key` 必须自己核查证据并给出可执行 REWORK，不得 `WaitHuman`。只有 state 中同 key 的独立 coder 报告数达到 2，planner 才可不写 `temp.md` 调用 `WaitHuman -Role planner -Reason <自足摘要>`。approval pass 必须落 `outcome=approval_pass, decision_by=approval_entry`，不冒充 planner 独立 PASS。
 
 ## 人工控制与恢复
@@ -114,15 +187,15 @@ planner 只审核，不替 coder 修改任务产物：
 - `状态` 只调用 `Show` 并投影状态，不创建 Goal/loop、不刷新租约、不迁移状态。
 - 既有同角色 session 在普通中断或 `paused_budget` 下输入“继续”，复用已持久绑定的 Goal/loop、repo、run、role 与 token：`running` 立即检查，`paused_budget` 调 `Recover` 后立即检查。对 `DOUBLE_SESSION_GOAL_CONTRACT=v2` 的 Codex Goal，Continue Goal 与同 session“继续”均走此路径；历史 Goal 必须先确认 objective 确实含明文 token，不能把客户端恢复 transcript 误当成恢复工具临时内存。
 - `wait_human` 是不同语义：既有同角色 session 输入 `继续/返工/通过` 时，入口从当前绑定 state 内部取得一次性 `human_approval_id` 并传给 `ResolveHuman`；全新或丢失上下文 session 仍须使用 `resume <decision> <human_approval_id>`，裸“继续”不得猜 run 或隐式 takeover。
-- 全新 coder session 发现同 repo 遗留 `wait_human` 时，必须显示旧 run 摘要并让用户明确选择：`恢复旧任务 / 取消旧任务并强制初始化 / 保留人工门并退出`。不得默认选择，不创建 Goal/loop。只有 coder 入口在用户本轮明确选择第二项后，才可用旧 run、repo 与当前 approval id 调 `ForceInit`。全新 planner session 不重复询问或退出，按“planner 唯一流程”进入预启动监视；它仍不得自行恢复、`ForceInit` 或消费新任务。
-- `ForceInit` 只接受 `wait_human`，要求非空且较旧 state 更新、hash 不同的新 `temp.md`，在 repo mutex 内冻结新任务并创建全新 coder run；新 state 记录 `replaced_run_id/replaced_status/replaced_at` 并清空旧批准编号与 ledger。旧窗口随后必须因 `RUN_MISMATCH` 被拒绝。其他状态调用或未检测到新任务均拒绝。
+- 全新 coder session 发现同 repo 遗留 `wait_human` 时，必须显示旧 run 摘要并让用户明确选择：`恢复旧任务 / 取消旧任务并强制初始化 / 保留人工门并退出`。不得默认选择，不创建 Goal/loop。只有 coder 入口在用户本轮明确选择第二项后，才可用旧 run、repo 与当前 approval id 调 `ForceInit`。全新 planner session 则只执行“planner 唯一流程”的遗留 active run 处置门：可恢复、可显式 `Cancel → ArchiveRun`、可退出，但不得调用 `ForceInit` 或消费 active run 下的 `temp.md`。
+- `ForceInit` 只接受 `wait_human`，且用户必须明确选择替换。新 `temp.md` 必须已经是合格合同，非空、hash 不同且较旧 state 更新；coder 传 `PreparedTaskSha256 + RuntimeClass + RuntimeEvidence` 后才在 repo mutex 内创建新 run。新 state 记录 `replaced_run_id/replaced_status/replaced_at` 并清空旧批准编号与 ledger；旧窗口随后必须因 `RUN_MISMATCH` 被拒绝。零散新需求应先取消/收口旧人工门，再由 planner KO，不得让 coder 重写合同。
 - `继续` 分态：`wait_human` 按批准编号恢复同一 run；`paused_budget` 由原 session 的本角色用原 token `Recover` 开新 segment；`running` 立即检查但不重复创建调度器；`done|cancelled` 拒绝复活。非 `resume_turn` 角色不得扮演另一角色。
 - 原 session 重新输入对应 double 入口时，先 `Config`，再以既有绑定调用 `RefreshBudget`；不得创建新 Goal/loop、`Init` 或新 token。配置预算未变化时该动作不写 state；变化时只开启一次新 segment。随后若仍为 `paused_budget`，再按“继续”规则 `Recover`。
-- `stop` 入口只调用 `Cancel`；允许从 `running|paused_budget|wait_human` 终止，同一 scheduler 下次 tick 看到 `cancelled` 必须退出。重复 stop 幂等返回原 cancelled 状态；done 后 stop 明确返回 `CANCEL_NOT_ALLOWED_DONE`。脚本只记录 `decision_by=control_entry`。
+- `stop` 入口只调用 `Cancel`；允许从 `running|paused_budget|wait_human` 终止，同一 scheduler 下次 tick 看到 `cancelled` 必须退出。重复 stop 幂等返回原 cancelled 状态；done 后 stop 明确返回 `CANCEL_NOT_ALLOWED_DONE`。脚本只记录 `decision_by=control_entry`。放弃旧 active run 并开始新任务的固定顺序是 `Cancel → ArchiveRun → 用户重新写入 temp.md → planner KO`；不得先写新需求再取消，也不得跳过归档直接覆写三份 live 文件。
 - `continue|rework|pass|cancel` 只能用于当前 `wait_human` 的 `allowed_resolutions`，并必须提交匹配的一次性 `human_approval_id`；不匹配即拒绝，成功后立即清空 id。
 - 新建 Codex Goal 前必须调用 `GoalContract`，并把 stdout 逐字交给 `create_goal`。v2 Goal 使用 Continue Goal、`/goal resume` 或同 session“继续”恢复；`/goal clear` 会删除持久 token，禁止把它作为 v2 日常恢复步骤，只能在 run 已终态或用户明确放弃旧任务后使用。
 - `CODEX_GOAL_BRIDGE_V1`：全新 run 保持“生成 token → `Init` → `GoalContract -CodexJsonEnvelope` → 校验信封 → `store()` 缓存绑定 → `create_goal`”的既有顺序。本次桥接失败留下的 `seq=0` 孤儿 run 走唯一例外：“生成 token → 用精确 run 调 `GoalContract -CodexJsonEnvelope` → 校验信封 → `store()` → `create_goal` → 成功后才调 `SafeBootstrapTakeover`”；这样修复当前残留而不改变普通新 run 架构。嵌套 `shell_command` 必须使用 `login:false`；PowerShell 必须捕获并禁止中间 stdout，只把 `CodexJsonEnvelope` 的单行压缩 JSON 作为唯一 payload。JavaScript 只允许从 shell 返回值的 `Output:` 段提取该唯一 JSON 行并直接 `JSON.parse`；`env.envelope` **必须精确等于** `DOUBLE_SESSION_CODEX_GOAL_ENVELOPE=v1`，不得拿流程名 `CODEX_GOAL_BRIDGE_V1` 代替字段值。随后逐项核验 `repo/run_id/role`，并确认 `goal_objective` 首行为 `DOUBLE_SESSION_GOAL_CONTRACT=v2`、其中 token 与信封完全一致；不得把信封或 token 传给 `text/image/audio/notify`。严禁 Base64、`atob`、`btoa`、`Buffer` 或其他自创编码桥；当前 `functions.exec` V8 环境不保证这些 API 存在。`store()` 只是同 session 故障缓存，不能替代 Goal objective。
-- Codex double 入口的恢复判断顺序固定为 `读 live skill/protocol → Config → Show live state → get_goal → 决策`。`Show` 前禁止用 transcript、旧工具输出或 Goal objective 推断当前 status/turn/seq；旧 Goal 为 `complete` 也不能覆盖 live state 已处于本角色安全 Handoff 边界的事实。
+- Codex double 入口的恢复判断顺序固定为 `读 live skill/protocol → BootstrapProbe → get_goal → 决策`。探针前禁止用 transcript、旧工具输出或 Goal objective 推断当前 status/turn/seq；旧 Goal 为 `complete` 也不能覆盖 live state 已处于本角色安全 Handoff 边界的事实。
 - 历史 Goal 兼容边界：objective 含精确 repo/run/role/token 时，重新输入当前 `$double-coder` / `$double-planner` 可用旧 token、但按 live skill/protocol 行为恢复；objective 缺 token 时必须报 `TOKEN_BINDING_LOST`，不能完成 Goal或猜 token。若旧 Goal已终止且 state 正处于对方完整 Handoff 给本角色的未消费边界，可用新 token `SafeTakeover` 并创建 v2 Goal；其余跨 token 中途恢复仍留作未来升级。
 - 唯一一次性历史迁移例外：旧 Codex planner Goal 已 `paused`、无法由现有 Goal 工具原地更新 objective，且 live state 正轮到 coder 时，用户可明确执行一次 `/goal clear` 后重输 `$double-planner`。新 planner Goal 只持久化新 token并 `WaitTurn`，不抢 planner lease；收到 coder 完整 Handoff 后才 `SafeTakeover`。这不是 v2 日常恢复步骤，不扩展到任意中途接管。
 - 自动找回任意旧 token、已 Consume 后跨 token 重建、事件日志或完整审计仍属于未来升级入口。显式 `Takeover -HumanApprovalId takeover:<run_id>` 仅保留为人工应急命令，不应写成日常恢复流程。
@@ -133,9 +206,11 @@ planner 只审核，不替 coder 修改任务产物：
 ```powershell
 $repo = (& git rev-parse --show-toplevel).Trim()
 $workerToken = [guid]::NewGuid().ToString('N')
-$state = pwsh -NoProfile -File $stateTool -Action Init -ExpectedRepo $repo -WorkerToken $workerToken | ConvertFrom-Json
+$probe = pwsh -NoProfile -File $stateTool -Action BootstrapProbe -ExpectedRepo $repo | ConvertFrom-Json
+$preparedHash = $probe.task_validation.task_sha256
+$state = pwsh -NoProfile -File $stateTool -Action Init -ExpectedRepo $repo -WorkerToken $workerToken -PreparedTaskSha256 $preparedHash -RuntimeClass unknown -RuntimeEvidence provider_not_proven | ConvertFrom-Json
 $runId = $state.run_id
-$goalObjective = pwsh -NoProfile -File $stateTool -Action GoalContract -Role coder -ExpectedRepo $repo -ExpectedRunId $runId -WorkerToken $workerToken
+$goalObjective = pwsh -NoProfile -File $stateTool -Action GoalContract -Role coder -ExpectedRepo $repo -ExpectedRunId $runId -WorkerToken $workerToken -PreparedTaskSha256 $preparedHash
 pwsh -NoProfile -File $stateTool -Action Show -ExpectedRepo $repo -ExpectedRunId $runId
 pwsh -NoProfile -File $stateTool -Action WaitTurn -Role coder -ObservedSeq $state.seq -TimeoutSeconds 3600 -ExpectedRepo $repo -ExpectedRunId $runId
 pwsh -NoProfile -File $stateTool -Action CheckBudget -Role coder -ExpectedRepo $repo -ExpectedRunId $runId -WorkerToken $workerToken

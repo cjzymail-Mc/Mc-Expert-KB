@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Config', 'GoalContract', 'Init', 'ForceInit', 'Show', 'WaitTurn', 'CheckBudget', 'RefreshBudget', 'Consume', 'Handoff', 'Done', 'WaitHuman', 'ResolveHuman', 'Cancel', 'Recover', 'SafeBootstrapTakeover', 'SafeTakeover', 'Takeover')]
+    [ValidateSet('Config', 'BootstrapProbe', 'ValidateTask', 'ConsumeDraft', 'CommitContract', 'ArchiveRun', 'GoalContract', 'Init', 'ForceInit', 'Show', 'WaitTurn', 'CheckBudget', 'RefreshBudget', 'Consume', 'Handoff', 'RecordGateResult', 'Done', 'WaitHuman', 'ResolveHuman', 'Cancel', 'Recover', 'SafeBootstrapTakeover', 'SafeTakeover', 'Takeover')]
     [string]$Action,
 
     [ValidateSet('coder', 'planner', 'claude', 'codex')]
@@ -31,6 +31,23 @@ param(
     [int]$ObservedSeq = -1,
 
     [int]$TimeoutSeconds = 0,
+
+    [ValidateSet('claude-native', 'codex-native', 'codex-glm', 'claude-glm', 'other', 'unknown')]
+    [string]$RuntimeClass = 'unknown',
+
+    [string]$RuntimeEvidence = '',
+
+    [string]$PreparedTaskSha256 = '',
+
+    [ValidateSet('planner', 'mc-expert')]
+    [string]$ReviewGateActor,
+
+    [ValidateSet('pass', 'rework', 'fail', 'blocked', 'transport_failure')]
+    [string]$ReviewGateResult,
+
+    [string]$ReviewEvidence = '',
+
+    [string]$ReviewFailureKey = '',
 
     [switch]$CodexJsonEnvelope
 )
@@ -91,6 +108,214 @@ function Get-DoubleSessionConfig {
         $normalized[$name] = [int]$number
     }
     return [pscustomobject]$normalized
+}
+
+function Get-TaskSection {
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory)][string]$Name,
+        [string]$NextName = ''
+    )
+    $startPattern = "(?im)^##[ \t]+$([regex]::Escape($Name))[ \t]*\r?$"
+    $start = [regex]::Match($Text, $startPattern)
+    if (-not $start.Success) { return '' }
+    $bodyStart = $start.Index + $start.Length
+    if ([string]::IsNullOrWhiteSpace($NextName)) {
+        return $Text.Substring($bodyStart).Trim()
+    }
+    $nextPattern = "(?im)^##[ \t]+$([regex]::Escape($NextName))[ \t]*\r?$"
+    $next = [regex]::Match($Text, $nextPattern, [System.Text.RegularExpressions.RegexOptions]::None, [TimeSpan]::FromSeconds(1))
+    if (-not $next.Success -or $next.Index -le $bodyStart) { return '' }
+    return $Text.Substring($bodyStart, $next.Index - $bodyStart).Trim()
+}
+
+function Get-TaskField {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text, [Parameter(Mandatory)][string]$Name)
+    $match = [regex]::Match($Text, "(?im)^[ \t]*$([regex]::Escape($Name)):[ \t]*(?<value>[^\r\n]+)")
+    if (-not $match.Success) { return '' }
+    return $match.Groups['value'].Value.Trim()
+}
+
+function Get-TaskValidation {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    $missing = [System.Collections.Generic.List[string]]::new()
+    $marker = [regex]::IsMatch($Text, '(?m)^DOUBLE_TASK_CONTRACT=v1\s*$')
+    if (-not $marker) { [void]$missing.Add('DOUBLE_TASK_CONTRACT=v1') }
+
+    $sections = @(
+        @{ name = 'original_request'; next = 'authority' },
+        @{ name = 'authority'; next = 'terminal_state' },
+        @{ name = 'terminal_state'; next = 'scope' },
+        @{ name = 'scope'; next = 'guardrails' },
+        @{ name = 'guardrails'; next = 'checkpoints' },
+        @{ name = 'checkpoints'; next = 'done_when' },
+        @{ name = 'done_when'; next = 'runtime' },
+        @{ name = 'runtime'; next = '' }
+    )
+    $sectionBodies = @{}
+    foreach ($section in $sections) {
+        $body = Get-TaskSection -Text $Text -Name $section.name -NextName $section.next
+        $sectionBodies[$section.name] = $body
+        if ([string]::IsNullOrWhiteSpace($body)) { [void]$missing.Add("section:$($section.name)") }
+    }
+
+    $requiredFields = @(
+        @{ section = 'original_request'; fields = @('original_request_sha256', 'original_request_json') },
+        @{ section = 'authority'; fields = @('target_repo', 'authority_sources') },
+        @{ section = 'terminal_state'; fields = @('result_state') },
+        @{ section = 'scope'; fields = @('in_scope', 'out_of_scope', 'read_forbidden', 'write_forbidden') },
+        @{ section = 'guardrails'; fields = @('red_lines', 'human_gates', 'authorization_boundary') },
+        @{ section = 'runtime'; fields = @('planner_runtime', 'review_gate', 'runtime_evidence') }
+    )
+    foreach ($group in $requiredFields) {
+        $body = [string]$sectionBodies[$group.section]
+        foreach ($field in $group.fields) {
+            if ([string]::IsNullOrWhiteSpace((Get-TaskField -Text $body -Name $field))) {
+                [void]$missing.Add("$($group.section):$field")
+            }
+        }
+    }
+
+    $originalHash = Get-TaskField -Text ([string]$sectionBodies['original_request']) -Name 'original_request_sha256'
+    $originalJson = Get-TaskField -Text ([string]$sectionBodies['original_request']) -Name 'original_request_json'
+    if (-not [string]::IsNullOrWhiteSpace($originalJson)) {
+        try {
+            $originalText = $originalJson | ConvertFrom-Json -ErrorAction Stop
+            if ($originalText -isnot [string] -or [string]::IsNullOrWhiteSpace($originalText)) {
+                [void]$missing.Add('original_request:original_request_json_empty')
+            }
+            elseif ($originalHash -ne (Get-Sha256 -Text ([string]$originalText))) {
+                [void]$missing.Add('original_request:sha256_mismatch')
+            }
+        }
+        catch { [void]$missing.Add('original_request:original_request_json_invalid') }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($originalHash) -and $originalHash -notmatch '^[0-9a-f]{64}$') {
+        [void]$missing.Add('original_request:original_request_sha256_invalid')
+    }
+
+    $checkpointMatches = [regex]::Matches([string]$sectionBodies['checkpoints'], '(?im)^\s*-\s+id:\s*[A-Za-z0-9_-]+\s*$')
+    if ($checkpointMatches.Count -eq 0) { [void]$missing.Add('checkpoints:item') }
+
+    $targetRepo = Get-TaskField -Text ([string]$sectionBodies['authority']) -Name 'target_repo'
+    if (-not [string]::IsNullOrWhiteSpace($targetRepo)) {
+        try {
+            if ([System.IO.Path]::GetFullPath($targetRepo.Trim('"')) -ne $repoRoot) {
+                [void]$missing.Add('authority:target_repo_mismatch')
+            }
+        }
+        catch { [void]$missing.Add('authority:target_repo_invalid') }
+    }
+
+    $plannerRuntime = Get-TaskField -Text ([string]$sectionBodies['runtime']) -Name 'planner_runtime'
+    $reviewGate = Get-TaskField -Text ([string]$sectionBodies['runtime']) -Name 'review_gate'
+    $runtimeEvidence = Get-TaskField -Text ([string]$sectionBodies['runtime']) -Name 'runtime_evidence'
+    $runtimeValues = @('claude-native', 'codex-native', 'codex-glm', 'claude-glm', 'other', 'unknown')
+    if (-not [string]::IsNullOrWhiteSpace($plannerRuntime) -and $plannerRuntime -notin $runtimeValues) {
+        [void]$missing.Add('runtime:planner_runtime_invalid')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($reviewGate) -and $reviewGate -notin @('planner_only', 'planner_plus_mc_expert')) {
+        [void]$missing.Add('runtime:review_gate_invalid')
+    }
+    if ($plannerRuntime -notin @('claude-native', 'codex-native') -and $reviewGate -eq 'planner_only') {
+        [void]$missing.Add('runtime:unknown_or_non_native_requires_double_gate')
+    }
+
+    $doneWhen = [string]$sectionBodies['done_when']
+    $doneMatches = [regex]::Matches($doneWhen, '(?ms)^\s*-\s+id:\s*(?<id>[A-Za-z0-9_-]+)\s*\r?\n(?<body>.*?)(?=^\s*-\s+id:|\z)')
+    if ($doneMatches.Count -eq 0) { [void]$missing.Add('done_when:item') }
+    $seenIds = @{}
+    foreach ($item in $doneMatches) {
+        $id = $item.Groups['id'].Value
+        if ($seenIds.ContainsKey($id)) { [void]$missing.Add("done_when:duplicate_id:$id") }
+        else { $seenIds[$id] = $true }
+        foreach ($field in @('claim', 'verification', 'expected', 'failure_case')) {
+            if ([string]::IsNullOrWhiteSpace((Get-TaskField -Text $item.Groups['body'].Value -Name $field))) {
+                [void]$missing.Add("done_when:${id}:$field")
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        marker = $marker
+        valid = $missing.Count -eq 0
+        missing = @($missing)
+        task_sha256 = if ([string]::IsNullOrEmpty($Text)) { '' } else { Get-Sha256 -Text $Text }
+        done_when_count = $doneMatches.Count
+        planner_runtime = $plannerRuntime
+        declared_review_gate = $reviewGate
+        runtime_evidence = $runtimeEvidence
+    }
+}
+
+function Get-EffectiveReviewGate {
+    param([string]$PlannerRuntime, [string]$CoderRuntime)
+    $native = @('claude-native', 'codex-native')
+    if ($PlannerRuntime -in $native -and $CoderRuntime -in $native) { return 'planner_only' }
+    return 'planner_plus_mc_expert'
+}
+
+function New-ReviewGateResults {
+    return [pscustomobject]@{
+        planner = [pscustomobject]@{ status = 'pending'; evidence_sha256 = ''; updated = '' }
+        mc_expert = [pscustomobject]@{ status = 'pending'; evidence_sha256 = ''; updated = ''; transport_failure_key = ''; transport_failure_count = 0 }
+    }
+}
+
+function Reset-ReviewGateResults {
+    param([Parameter(Mandatory)]$State)
+    Set-StateProperty -State $State -Name 'review_gate_results' -Value (New-ReviewGateResults)
+}
+
+function Get-RunArchivePath {
+    param([Parameter(Mandatory)]$State)
+    $stamp = [DateTimeOffset]::Parse([string]$State.updated, [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString('yyyyMMdd-HHmmss')
+    return Join-Path $repoRoot ("team-progress\double-workflow\$stamp-$($State.run_id).md")
+}
+
+function Remove-ArchiveSecrets {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    return [regex]::Replace(
+        $Text,
+        '(?im)^.*(?:worker_token|token_sha256|worker_token_hashes|worker_lease_deadlines|human_approval_id).*(?:\r?\n|$)',
+        ''
+    )
+}
+
+function Write-RunArchive {
+    param(
+        [Parameter(Mandatory)]$State,
+        [string]$ArchiveOutcome = '',
+        [string]$ReplacementRunId = ''
+    )
+    $archivePath = Get-RunArchivePath -State $State
+    if ([System.IO.File]::Exists($archivePath)) {
+        return [pscustomobject]@{ archive_path = $archivePath; created = $false; sha256 = (Get-FileSha256 -Path $archivePath) }
+    }
+    if (-not [System.IO.File]::Exists($taskPath)) { throw 'ARCHIVE_TASK_NOT_FOUND' }
+    $taskText = Remove-ArchiveSecrets -Text ([System.IO.File]::ReadAllText($taskPath, $utf8))
+    $messageText = if ([System.IO.File]::Exists($messagePath)) { Remove-ArchiveSecrets -Text ([System.IO.File]::ReadAllText($messagePath, $utf8)) } else { '' }
+    $outcome = if ([string]::IsNullOrWhiteSpace($ArchiveOutcome)) { [string]$State.status } else { $ArchiveOutcome }
+    $replacementLine = if ([string]::IsNullOrWhiteSpace($ReplacementRunId)) { '' } else { "- replacement_run_id: $ReplacementRunId`n" }
+    $archiveText = @"
+# double-workflow run archive
+
+- run_id: $($State.run_id)
+- terminal_status: $($State.status)
+- outcome: $outcome
+- updated: $($State.updated)
+$replacementLine
+## frozen_task
+
+$taskText
+
+## planner_final_message
+
+$messageText
+"@
+    [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($archivePath)) | Out-Null
+    Write-AtomicText -Path $archivePath -Text $archiveText
+    return [pscustomobject]@{ archive_path = $archivePath; created = $true; sha256 = (Get-FileSha256 -Path $archivePath) }
 }
 
 function Write-AtomicText {
@@ -160,6 +385,17 @@ function Read-State {
         if ($version -le 4 -or -not ($state.PSObject.Properties.Name -contains 'failure_ledger')) {
             Set-StateProperty -State $state -Name 'version' -Value 5
             Set-StateProperty -State $state -Name 'failure_ledger' -Value $null
+        }
+        if ($version -le 5 -or -not ($state.PSObject.Properties.Name -contains 'effective_review_gate')) {
+            Set-StateProperty -State $state -Name 'version' -Value 6
+            Set-StateProperty -State $state -Name 'prepared_task_sha256' -Value $(if ($state.PSObject.Properties.Name -contains 'task_sha256') { [string]$state.task_sha256 } else { '' })
+            Set-StateProperty -State $state -Name 'planner_runtime' -Value 'unknown'
+            Set-StateProperty -State $state -Name 'coder_runtime' -Value 'unknown'
+            Set-StateProperty -State $state -Name 'runtime_evidence' -Value ([pscustomobject]@{ planner = 'legacy_state_provider_not_proven'; coder = 'legacy_state_provider_not_proven' })
+            Set-StateProperty -State $state -Name 'effective_review_gate' -Value 'planner_plus_mc_expert'
+            Set-StateProperty -State $state -Name 'review_gate_results' -Value (New-ReviewGateResults)
+            Set-StateProperty -State $state -Name 'archive_path' -Value ''
+            Set-StateProperty -State $state -Name 'terminal_archive_sha256' -Value ''
         }
         if (-not ($state.PSObject.Properties.Name -contains 'phase')) {
             Set-StateProperty -State $state -Name 'phase' -Value 'ready'
@@ -489,7 +725,7 @@ function Set-NewBudgetSegment {
         1
     }
     Set-StateProperty -State $State -Name 'status' -Value 'running'
-    Set-StateProperty -State $State -Name 'version' -Value 5
+    Set-StateProperty -State $State -Name 'version' -Value 6
     Set-StateProperty -State $State -Name 'segment' -Value $nextSegment
     Set-StateProperty -State $State -Name 'budget_seconds' -Value $Seconds
     Set-StateProperty -State $State -Name 'budget_started' -Value $now.ToString('o')
@@ -528,6 +764,64 @@ if ($Action -eq 'Config') {
     exit 0
 }
 
+function Get-TempInspection {
+    param([switch]$IncludeContent)
+    if (-not [System.IO.File]::Exists($tempPath)) {
+        return [pscustomobject]@{ exists = $false; length = 0; mtime_utc = ''; sha256 = ''; content = '' }
+    }
+    $info = [System.IO.FileInfo]::new($tempPath)
+    $content = if ($IncludeContent) { [System.IO.File]::ReadAllText($tempPath, $utf8) } else { '' }
+    [pscustomobject]@{
+        exists = $true
+        length = [long]$info.Length
+        mtime_utc = $info.LastWriteTimeUtc.ToString('o')
+        sha256 = if ($info.Length -eq 0) { '' } else { Get-FileSha256 -Path $tempPath }
+        content = $content
+    }
+}
+
+function Test-TerminalNewTask {
+    param([Parameter(Mandatory)]$State, [Parameter(Mandatory)]$Temp)
+    if (-not $Temp.exists -or [long]$Temp.length -eq 0) { return $false }
+    if (($State.PSObject.Properties.Name -contains 'terminal_temp_sha256') -and
+        -not [string]::IsNullOrWhiteSpace([string]$State.terminal_temp_sha256) -and
+        [string]$Temp.sha256 -eq [string]$State.terminal_temp_sha256) { return $false }
+    $terminalUpdated = [DateTimeOffset]::Parse([string]$State.updated, [Globalization.CultureInfo]::InvariantCulture)
+    return [DateTime]::Parse([string]$Temp.mtime_utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) -gt $terminalUpdated.UtcDateTime
+}
+
+function Assert-DraftPreparationAllowed {
+    param([switch]$RequireNewTask)
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRepo) -and [System.IO.Path]::GetFullPath($ExpectedRepo) -ne $repoRoot) {
+        throw "REPO_MISMATCH: expected=$ExpectedRepo actual=$repoRoot"
+    }
+    $existing = $null
+    if ([System.IO.File]::Exists($statePath)) {
+        $existing = Read-State
+        Assert-RunBinding -State $existing
+        if ($existing.status -in @('running', 'paused_budget', 'wait_human')) {
+            throw "DRAFT_PREPARATION_ACTIVE_STATE: $($existing.status)"
+        }
+        if ($existing.status -notin @('done', 'cancelled')) {
+            throw "DRAFT_PREPARATION_STATE_INVALID: $($existing.status)"
+        }
+        if ($RequireNewTask) {
+            $temp = Get-TempInspection
+            if (-not (Test-TerminalNewTask -State $existing -Temp $temp)) { throw 'NEW_TASK_NOT_DETECTED' }
+        }
+        $archivePath = Get-RunArchivePath -State $existing
+        if (-not [System.IO.File]::Exists($archivePath)) { throw 'TERMINAL_ARCHIVE_REQUIRED' }
+    }
+    return $existing
+}
+
+if ($Action -eq 'ValidateTask') {
+    $temp = Get-TempInspection -IncludeContent
+    $validation = Get-TaskValidation -Text ([string]$temp.content)
+    [pscustomobject]@{ temp = $temp; validation = $validation } | ConvertTo-Json -Depth 8
+    exit 0
+}
+
 if ($Action -eq 'GoalContract') {
     if (-not $Role) { throw 'ROLE_REQUIRED' }
     if ([string]::IsNullOrWhiteSpace($WorkerToken)) { throw 'WORKER_TOKEN_REQUIRED' }
@@ -544,6 +838,9 @@ if ($Action -eq 'GoalContract') {
         [int]$config.planner_interval_seconds
     }
     $runBinding = if ([string]::IsNullOrWhiteSpace($ExpectedRunId)) { 'PENDING' } else { $ExpectedRunId }
+    if ($runBinding -eq 'PENDING' -and [string]::IsNullOrWhiteSpace($PreparedTaskSha256)) {
+        throw 'PREPARED_TASK_SHA256_REQUIRED'
+    }
     $skillPath = Join-Path $env:USERPROFILE ".agents\skills\double-$Role\SKILL.md"
     $protocolPath = Join-Path $env:USERPROFILE '.agents\double-session-common\protocol.md'
     $goalContract = @(
@@ -552,10 +849,11 @@ if ($Action -eq 'GoalContract') {
         "run_id=$runBinding"
         "role=$Role"
         "worker_token=$WorkerToken"
+        "prepared_task_sha256=$PreparedTaskSha256"
         "wait_seconds_at_creation=$waitSeconds"
         "live_skill=$skillPath"
         "live_protocol=$protocolPath"
-        'CONTINUATION_BOOTSTRAP=Before every Goal continuation and before every state action, fully re-read live_skill and live_protocol, then call Config. The live files override stale workflow prose in this Goal.'
+        'CONTINUATION_BOOTSTRAP=Before every Goal continuation and before every state action, fully re-read live_skill and live_protocol, then call BootstrapProbe. The live files override stale workflow prose in this Goal.'
         'TOKEN_RULE=worker_token above is the durable source of truth. Reconstruct it from this objective every turn; tool store() is cache only and may be empty after restart.'
         'RUN_RULE=Reuse repo, role and worker_token exactly. If run_id=PENDING, bind only to the first running or paused_budget run observed in repo; otherwise require the exact run_id.'
         'RESUME_RULE=An explicit Continue Goal, goal resume, Chinese 继续, or re-entered double skill may Recover paused_budget with the bound token, then immediately recheck state.'
@@ -598,6 +896,114 @@ catch [System.Threading.AbandonedMutexException] {
 }
 if (-not $lockTaken) { throw 'REPO_BUSY' }
 switch ($Action) {
+    'BootstrapProbe' {
+        $overallClock = [System.Diagnostics.Stopwatch]::StartNew()
+        $clock = [System.Diagnostics.Stopwatch]::StartNew()
+        $config = Get-DoubleSessionConfig
+        $clock.Stop()
+        $configMs = [int]$clock.ElapsedMilliseconds
+
+        $clock.Restart()
+        $state = $null
+        $stateFound = [System.IO.File]::Exists($statePath)
+        if ($stateFound) {
+            $state = Read-State
+            Assert-RunBinding -State $state
+        }
+        $clock.Stop()
+        $stateMs = [int]$clock.ElapsedMilliseconds
+
+        $tempSummary = [pscustomobject]@{ inspected = $false; exists = $false; length = 0; mtime_utc = ''; sha256 = '' }
+        $validation = [pscustomobject]@{ marker = $false; valid = $false; missing = @(); task_sha256 = ''; done_when_count = 0; planner_runtime = ''; declared_review_gate = ''; runtime_evidence = '' }
+        $route = ''
+        $terminalNextRoute = ''
+        $tempMs = 0
+        $validationMs = 0
+
+        if ($stateFound -and $state.status -in @('running', 'paused_budget', 'wait_human')) {
+            $route = switch ([string]$state.status) {
+                'wait_human' { 'WAIT_HUMAN_DECISION' }
+                default { 'RESUME_RUN' }
+            }
+        }
+        else {
+            $clock.Restart()
+            $temp = Get-TempInspection -IncludeContent
+            $clock.Stop()
+            $tempMs = [int]$clock.ElapsedMilliseconds
+            $tempSummary = [pscustomobject]@{ inspected = $true; exists = $temp.exists; length = $temp.length; mtime_utc = $temp.mtime_utc; sha256 = $temp.sha256 }
+            if ($temp.exists -and [long]$temp.length -gt 0) {
+                $clock.Restart()
+                $validation = Get-TaskValidation -Text ([string]$temp.content)
+                $clock.Stop()
+                $validationMs = [int]$clock.ElapsedMilliseconds
+            }
+
+            if (-not $stateFound) {
+                if (-not $temp.exists -or [long]$temp.length -eq 0) { $route = 'TASK_DRAFT_EMPTY' }
+                elseif ($validation.marker -and $validation.valid) { $route = 'CONTRACT_READY' }
+                elseif ($validation.marker) { $route = 'TASK_PREFLIGHT_REQUIRED' }
+                else { $route = 'PREPARE_DRAFT' }
+            }
+            elseif ($state.status -in @('done', 'cancelled')) {
+                if (-not (Test-TerminalNewTask -State $state -Temp $temp)) { $route = 'TERMINAL_NO_NEW_TASK' }
+                else {
+                    $route = 'TERMINAL_ARCHIVE_THEN_PREPARE'
+                    if ($validation.marker -and $validation.valid) { $terminalNextRoute = 'CONTRACT_READY' }
+                    elseif ($validation.marker) { $terminalNextRoute = 'TASK_PREFLIGHT_REQUIRED' }
+                    else { $terminalNextRoute = 'PREPARE_DRAFT' }
+                }
+            }
+            else { throw "BOOTSTRAP_STATE_INVALID: $($state.status)" }
+        }
+        $overallClock.Stop()
+        [pscustomobject]@{
+            route = $route
+            terminal_next_route = $terminalNextRoute
+            config = $config
+            state_found = $stateFound
+            state = $state
+            temp = $tempSummary
+            task_validation = $validation
+            timings_ms = [pscustomobject]@{ config = $configMs; state = $stateMs; temp = $tempMs; validation = $validationMs; total = [int]$overallClock.ElapsedMilliseconds }
+        } | ConvertTo-Json -Depth 10
+    }
+
+    'ConsumeDraft' {
+        [void](Assert-DraftPreparationAllowed -RequireNewTask)
+        if (-not [System.IO.File]::Exists($tempPath)) { throw 'TEMP_NOT_FOUND' }
+        $draft = [System.IO.File]::ReadAllText($tempPath, $utf8)
+        if ([string]::IsNullOrWhiteSpace($draft)) { throw 'TASK_DRAFT_EMPTY' }
+        $validation = Get-TaskValidation -Text $draft
+        if ($validation.marker) { throw 'CONTRACT_DRAFT_MUST_NOT_BE_CONSUMED' }
+        $stream = [System.IO.FileStream]::new($tempPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        try { $stream.SetLength(0); $stream.Flush($true) }
+        finally { $stream.Dispose() }
+        if (([System.IO.FileInfo]::new($tempPath)).Length -ne 0) { throw 'TEMP_CLEAR_VERIFY_FAILED' }
+        $draft
+    }
+
+    'CommitContract' {
+        [void](Assert-DraftPreparationAllowed)
+        if (-not [System.IO.File]::Exists($tempPath)) { throw 'TEMP_NOT_FOUND' }
+        $contract = [System.IO.File]::ReadAllText($tempPath, $utf8)
+        $validation = Get-TaskValidation -Text $contract
+        if (-not $validation.valid) { throw "TASK_PREFLIGHT_REQUIRED: $($validation.missing -join ',')" }
+        Write-AtomicText -Path $tempPath -Text $contract
+        [pscustomobject]@{ prepared_task_sha256 = (Get-FileSha256 -Path $tempPath); validation = $validation } | ConvertTo-Json -Depth 8
+    }
+
+    'ArchiveRun' {
+        $state = Read-State
+        Assert-RunBinding -State $state
+        if ($state.status -notin @('done', 'cancelled')) { throw "ARCHIVE_NOT_TERMINAL: $($state.status)" }
+        $archive = Write-RunArchive -State $state
+        Set-StateProperty -State $state -Name 'archive_path' -Value ([string]$archive.archive_path)
+        Set-StateProperty -State $state -Name 'terminal_archive_sha256' -Value ([string]$archive.sha256)
+        Write-State -State $state
+        [pscustomobject]@{ archive = $archive; state = $state } | ConvertTo-Json -Depth 9
+    }
+
     'Init' {
         $config = Get-DoubleSessionConfig
         $budgetSeconds = [int]$config.max_budget_seconds
@@ -609,7 +1015,7 @@ switch ($Action) {
             if ($existing.status -eq 'running') {
                 if (-not ($existing.PSObject.Properties.Name -contains 'budget_deadline')) {
                     Set-NewBudgetSegment -State $existing -Seconds $budgetSeconds
-                    $existing.version = 5
+                    $existing.version = 6
                     Write-State -State $existing
                 }
                 elseif ($existing.turn -eq 'coder' -and (Test-BudgetExpired -State $existing)) {
@@ -625,7 +1031,7 @@ switch ($Action) {
             }
             if ($existing.status -eq 'paused_budget') {
                 Set-NewBudgetSegment -State $existing -Seconds $budgetSeconds
-                $existing.version = 5
+                $existing.version = 6
                 Set-WorkerLease -State $existing -LeaseRole 'coder' -Token $WorkerToken
                 Write-State -State $existing
                 $existing | ConvertTo-Json -Depth 8
@@ -657,16 +1063,27 @@ switch ($Action) {
             if ($tempInfo.LastWriteTimeUtc -le $terminalUpdated.UtcDateTime) {
                 throw 'NEW_TASK_NOT_NEWER_THAN_TERMINAL_STATE'
             }
+            $archivePath = Get-RunArchivePath -State $existing
+            if (-not [System.IO.File]::Exists($archivePath)) { throw 'TERMINAL_ARCHIVE_REQUIRED' }
         }
         $task = [System.IO.File]::ReadAllText($tempPath, $utf8)
         if ([string]::IsNullOrWhiteSpace($task)) {
             throw 'INITIAL_TASK_EMPTY'
         }
+        $taskValidation = Get-TaskValidation -Text $task
+        if (-not $taskValidation.valid) { throw "TASK_PREFLIGHT_REQUIRED: $($taskValidation.missing -join ',')" }
+        $taskHash = Get-Sha256 -Text $task
+        if ([string]::IsNullOrWhiteSpace($PreparedTaskSha256)) { throw 'PREPARED_TASK_SHA256_REQUIRED' }
+        if ($PreparedTaskSha256 -ne $taskHash) {
+            throw "PREPARED_TASK_MISMATCH: expected=$PreparedTaskSha256 actual=$taskHash"
+        }
+        if ([string]::IsNullOrWhiteSpace($RuntimeEvidence)) { throw 'RUNTIME_EVIDENCE_REQUIRED' }
+        $effectiveReviewGate = Get-EffectiveReviewGate -PlannerRuntime ([string]$taskValidation.planner_runtime) -CoderRuntime $RuntimeClass
 
         Write-AtomicText -Path $taskPath -Text $task
         Write-AtomicText -Path $messagePath -Text $task
         $state = [ordered]@{
-            version = 5
+            version = 6
             owner_repo = $repoRoot
             run_id = [guid]::NewGuid().ToString('N')
             status = 'running'
@@ -676,8 +1093,9 @@ switch ($Action) {
             budget_seconds = $budgetSeconds
             budget_started = [DateTimeOffset]::Now.ToString('o')
             budget_deadline = [DateTimeOffset]::Now.AddSeconds($budgetSeconds).ToString('o')
-            task_sha256 = Get-Sha256 -Text $task
-            message_sha256 = Get-Sha256 -Text $task
+            task_sha256 = $taskHash
+            prepared_task_sha256 = $PreparedTaskSha256
+            message_sha256 = $taskHash
             message_seq = 0
             updated = [DateTimeOffset]::Now.ToString('o')
             reason = ''
@@ -687,6 +1105,13 @@ switch ($Action) {
             decision_by = ''
             human_approval_id = ''
             failure_ledger = $null
+            planner_runtime = [string]$taskValidation.planner_runtime
+            coder_runtime = $RuntimeClass
+            runtime_evidence = [ordered]@{ planner = [string]$taskValidation.runtime_evidence; coder = $RuntimeEvidence }
+            effective_review_gate = $effectiveReviewGate
+            review_gate_results = New-ReviewGateResults
+            archive_path = ''
+            terminal_archive_sha256 = ''
             phase = 'ready'
             mutation_action = ''
             mutation_role = ''
@@ -875,6 +1300,7 @@ switch ($Action) {
                 }
             }
         }
+        Reset-ReviewGateResults -State $state
         $state.updated = [DateTimeOffset]::Now.ToString('o')
         if (Test-BudgetExpired -State $state) {
             $state.status = 'paused_budget'
@@ -886,6 +1312,69 @@ switch ($Action) {
         $wakeRunId = [string]$state.run_id
         [void]$wakeRoles.Add($To)
         $state | ConvertTo-Json -Depth 8
+    }
+
+    'RecordGateResult' {
+        if ($Role -ne 'planner') { throw 'ONLY_PLANNER_CAN_RECORD_GATE' }
+        if (-not $ReviewGateActor) { throw 'REVIEW_GATE_ACTOR_REQUIRED' }
+        if (-not $ReviewGateResult) { throw 'REVIEW_GATE_RESULT_REQUIRED' }
+        if ([string]::IsNullOrWhiteSpace($ReviewEvidence)) { throw 'REVIEW_EVIDENCE_REQUIRED' }
+        if ($ReviewGateResult -eq 'transport_failure' -and $ReviewGateActor -ne 'mc-expert') {
+            throw 'TRANSPORT_FAILURE_MC_EXPERT_ONLY'
+        }
+        if ($ReviewGateResult -eq 'transport_failure' -and [string]::IsNullOrWhiteSpace($ReviewFailureKey)) {
+            throw 'REVIEW_FAILURE_KEY_REQUIRED'
+        }
+        $state = Read-State
+        Assert-RunBinding -State $state
+        Assert-WorkerLease -State $state -LeaseRole 'planner' -Token $WorkerToken
+        Assert-RoleTurn -State $state -ExpectedRole 'planner'
+        Assert-FrozenTask -State $state
+        if ($ReviewGateActor -eq 'mc-expert' -and $ReviewGateResult -eq 'pass' -and
+            [string]$state.review_gate_results.planner.status -ne 'pass') {
+            throw 'PLANNER_PASS_REQUIRED_BEFORE_MC_EXPERT'
+        }
+        Start-Mutation -State $state -Name 'RecordGateResult' -MutationRole 'planner' -Token $WorkerToken
+        $now = [DateTimeOffset]::Now.ToString('o')
+        $evidenceHash = Get-Sha256 -Text $ReviewEvidence
+        if ($ReviewGateActor -eq 'planner') {
+            $state.review_gate_results.planner.status = $ReviewGateResult
+            $state.review_gate_results.planner.evidence_sha256 = $evidenceHash
+            $state.review_gate_results.planner.updated = $now
+        }
+        else {
+            $mc = $state.review_gate_results.mc_expert
+            if ($ReviewGateResult -eq 'transport_failure') {
+                if ([string]$mc.transport_failure_key -eq $ReviewFailureKey) {
+                    $mc.transport_failure_count = [int]$mc.transport_failure_count + 1
+                }
+                else {
+                    $mc.transport_failure_key = $ReviewFailureKey
+                    $mc.transport_failure_count = 1
+                }
+            }
+            else {
+                $mc.transport_failure_key = ''
+                $mc.transport_failure_count = 0
+            }
+            $mc.status = $ReviewGateResult
+            $mc.evidence_sha256 = $evidenceHash
+            $mc.updated = $now
+        }
+        $state.updated = $now
+        if ($ReviewGateActor -eq 'mc-expert' -and $ReviewGateResult -eq 'transport_failure' -and
+            [int]$state.review_gate_results.mc_expert.transport_failure_count -ge 2) {
+            $state.status = 'wait_human'
+            $state.resume_turn = 'planner'
+            $state.allowed_resolutions = @('continue', 'rework', 'pass', 'cancel')
+            $state.human_approval_id = [guid]::NewGuid().ToString('N')
+            $state.reason = "mc_expert_transport_failure_fuse:$ReviewFailureKey"
+            $state.seq = [int]$state.seq + 1
+        }
+        Complete-Mutation -State $state
+        Set-LastAction -State $state -Name 'RecordGateResult' -ActionRole 'planner' -Token $WorkerToken
+        Write-State -State $state
+        $state | ConvertTo-Json -Depth 9
     }
 
     'Done' {
@@ -901,6 +1390,13 @@ switch ($Action) {
         }
         Assert-RoleTurn -State $state -ExpectedRole 'planner'
         Assert-FrozenTask -State $state
+        if ([string]$state.review_gate_results.planner.status -ne 'pass') {
+            throw 'PLANNER_GATE_PASS_REQUIRED'
+        }
+        if ([string]$state.effective_review_gate -eq 'planner_plus_mc_expert' -and
+            [string]$state.review_gate_results.mc_expert.status -ne 'pass') {
+            throw 'MC_EXPERT_GATE_PASS_REQUIRED'
+        }
         if (-not [System.IO.File]::Exists($tempPath) -or
             ([System.IO.FileInfo]::new($tempPath)).Length -eq 0) {
             throw 'FINAL_REVIEW_EMPTY'
@@ -967,6 +1463,14 @@ switch ($Action) {
         $task = [System.IO.File]::ReadAllText($tempPath, $utf8)
         if ([string]::IsNullOrWhiteSpace($task)) { throw 'NEW_TASK_NOT_DETECTED' }
         $taskHash = Get-Sha256 -Text $task
+        $taskValidation = Get-TaskValidation -Text $task
+        if (-not $taskValidation.valid) { throw "TASK_PREFLIGHT_REQUIRED: $($taskValidation.missing -join ',')" }
+        if ([string]::IsNullOrWhiteSpace($PreparedTaskSha256)) { throw 'PREPARED_TASK_SHA256_REQUIRED' }
+        if ($PreparedTaskSha256 -ne $taskHash) {
+            throw "PREPARED_TASK_MISMATCH: expected=$PreparedTaskSha256 actual=$taskHash"
+        }
+        if ([string]::IsNullOrWhiteSpace($RuntimeEvidence)) { throw 'RUNTIME_EVIDENCE_REQUIRED' }
+        $effectiveReviewGate = Get-EffectiveReviewGate -PlannerRuntime ([string]$taskValidation.planner_runtime) -CoderRuntime $RuntimeClass
         if (($existing.PSObject.Properties.Name -contains 'message_sha256') -and
             $taskHash -eq [string]$existing.message_sha256) { throw 'NEW_TASK_NOT_DETECTED' }
         $oldUpdated = [DateTimeOffset]::Parse([string]$existing.updated, [Globalization.CultureInfo]::InvariantCulture)
@@ -974,7 +1478,7 @@ switch ($Action) {
 
         $now = [DateTimeOffset]::Now
         $state = [ordered]@{
-            version = 5
+            version = 6
             owner_repo = $repoRoot
             run_id = [guid]::NewGuid().ToString('N')
             status = 'running'
@@ -985,6 +1489,7 @@ switch ($Action) {
             budget_started = $now.ToString('o')
             budget_deadline = $now.AddSeconds($budgetSeconds).ToString('o')
             task_sha256 = $taskHash
+            prepared_task_sha256 = $PreparedTaskSha256
             message_sha256 = $taskHash
             message_seq = 0
             updated = $now.ToString('o')
@@ -995,6 +1500,13 @@ switch ($Action) {
             decision_by = 'control_entry'
             human_approval_id = ''
             failure_ledger = $null
+            planner_runtime = [string]$taskValidation.planner_runtime
+            coder_runtime = $RuntimeClass
+            runtime_evidence = [ordered]@{ planner = [string]$taskValidation.runtime_evidence; coder = $RuntimeEvidence }
+            effective_review_gate = $effectiveReviewGate
+            review_gate_results = New-ReviewGateResults
+            archive_path = ''
+            terminal_archive_sha256 = ''
             replaced_run_id = [string]$existing.run_id
             replaced_status = 'wait_human'
             replaced_at = $now.ToString('o')
