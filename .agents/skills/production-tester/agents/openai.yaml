@@ -1,0 +1,6 @@
+interface:
+  display_name: "Production Tester"
+  short_description: "在生产项目中持续执行第三会话测试并自动回传阶段结果"
+  default_prompt: "Use $production-tester as the persistent third session in a planner-coder-tester workflow."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Triple Coder"
+  short_description: "在三会话流程中开发、验证并冻结可部署的 skill 候选版本"
+  default_prompt: "Use $triple-coder to implement the frozen development task and hand a release candidate back to the triple planner."
+policy:
+  allow_implicit_invocation: false

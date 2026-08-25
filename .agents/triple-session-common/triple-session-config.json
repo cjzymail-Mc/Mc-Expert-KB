@@ -1,0 +1,7 @@
+{
+  "inherits": "../double-session-common/double-session-config.json",
+  "role_interval_fields": {
+    "planner": "planner_interval_seconds",
+    "tester": "coder_interval_seconds"
+  }
+}
