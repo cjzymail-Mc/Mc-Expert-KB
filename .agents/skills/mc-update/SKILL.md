@@ -43,7 +43,7 @@ pwsh -NoProfile -File (Join-Path (Join-Path $env:USERPROFILE '.agents\skills\_mc
 - **变更日志**（4d）：4a–4c 任一触发 → STATE.md 变更日志表 +1 行（日期 + 简述）。契约层 AGENTS.md/CLAUDE.md 不维护 changelog。
 - **dangling 引用**（4e 之后）：挪/删文件后 grep 修复。
 
-> 旧 adapter 把"CLAUDE.md/STATE.md 无等价 harness"误推成要用户手工处理，是**假降级**——把 memory 写权限差异误扩大成文档更新能力不存在。Codex 有 workspace 写能力，repo 内文档直接改（`.agents`/`.codex` 只读路径走 `require_escalated`）。
+> 旧 adapter 把"CLAUDE.md/STATE.md 无等价 harness"误推成要用户手工处理，是**假降级**——把 memory 写权限差异误扩大成文档更新能力不存在。Codex 有 workspace 写能力，普通 repo 文档直接改；受保护的 `.codex` 写入必须遵守下方 inbox write gate，不得把 `require_escalated` 当成一定可用的写入实现。
 
 ### ② 知识 lane（频次 + 去重两道闸，从严）
 
@@ -79,6 +79,25 @@ destination_candidate: <路径或类别>              # 建议去向，人审时
 
 Codex **不直写** `.claude/auto-memory/` 或 `.claude/memory/`（边界，plan02 D3）。通过闸门的候选只写 `.codex/memory-inbox/` proposal，等人审晋升（正式 apply 入口是 Claude `/mc-update`，见 §7.5 M1-Scope）。inbox 是 proposal/audit 暂存，不是"Codex 自己已学会"。
 
+#### ④a interactive 状态机（覆盖 Claude 母本的 apply 语义）
+
+Codex adapter 只负责 **stage proposal**，不得执行 Claude 母本第 3 步的 canonical apply：
+
+- 本会话新候选被用户选中后，只新建或 append inbox proposal，保持 `status: proposed` + `review: pending`；用户说“批准”“按推荐执行”在本 adapter 中只授权写入 proposal，不等于授权写 `.claude/*`。
+- 扫到的既有 `status: proposed` + `review: pending` 文件只作为“等待 Claude review”的只读信息展示，不进入 Codex 的批准/拒绝动作集，不回写 `accepted` / `rejected`，避免制造 `accepted-but-unapplied` 悬挂状态。
+- inbox staging 失败时，不得把任务改写为“应用正式 memory”，也不得把“请改用 Claude apply canonical”当作写 inbox 的替代完成路径。
+
+#### ④b inbox write gate（权限前置条件 + 单次失败）
+
+目标环境必须给当前 repo 的 **`.codex/memory-inbox/` 子目录**写权限；只需开放该子目录，`.codex` 其余路径继续只读。该权限来自会话/runner 的 `permission_profile`，不是 repo `.codex/config*` 或 user `config.toml`；adapter 不得自行扩大 writable roots。
+
+执行写入时：
+
+1. 先解析并校验绝对目标仍位于 `<repo>/.codex/memory-inbox/`，且只写 proposal/audit Markdown。
+2. 只调用一次原生 `apply_patch`。若当前原生 file-edit tool 本身不能携带 escalation，不得改造为 `git apply`、shell 重定向、`Set-Content`、临时补丁链或其他 writer 绕过。
+3. 权限拒绝立即返回 `BLOCKED_INBOX_UNWRITABLE target=<path> required_write_root=<repo>/.codex/memory-inbox/`；保持候选内容在回复中，目标文件零改动，不重试第二种 writer。
+4. 只有 proposal 成功落盘才可报告 `$mc-update` proposal lane 完成；任何 `.claude/*` 仍保持零写入。
+
 ## 两种 proposal 模式（§7.4）
 
 | 模式 | 触发 | 行为 |
@@ -97,6 +116,7 @@ deferred-review 不是绕过人工记忆门——人工门从"能不能先保存
 - **Claude memory 直写** → Codex 侧只产 proposal 到 `.codex/memory-inbox/`，**不直写**。
 - **MEMORY.md 索引更新**（Claude auto-memory 索引）→ Codex 不更新 Claude 索引；inbox proposal 自带 frontmatter 即索引。
 - **正式 apply**（写 canonical memory）→ Codex 无 apply 权限；Claude `/mc-update` review 流程（P6 M1-Scope 后扫 Codex inbox）是唯一 apply 入口。
+- **inbox staging**（写 `.codex/memory-inbox/`）→ 是 Codex 自身交付，不得与 canonical apply 混为一谈；staging 权限缺失只报 `BLOCKED_INBOX_UNWRITABLE`。
 
 ## 边界
 
@@ -104,6 +124,7 @@ deferred-review 不是绕过人工记忆门——人工门从"能不能先保存
 - 任务途中不碰 memory（只在收尾走本流程）。
 - 文档/状态 lane 不被知识 lane 闸门控：没有 memory 候选 ≠ 跳过 STATE/文档同步。
 - 不假装"Codex 能 apply canonical memory"——只能产 proposal。
+- 不把“inbox 不可写”升级或转义成“需要 Claude 写正式 memory”；两者是不同权限、不同交付。
 
 
 
