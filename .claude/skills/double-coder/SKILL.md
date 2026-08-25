@@ -12,7 +12,7 @@ description: 让 Claude 在当前 Git repo 中担任双窗口接力 coder。用�
 - 状态脚本固定为 `$env:USERPROFILE\.agents\double-session-common\double-session-state.ps1`，角色固定为 `coder`。
 - 除 `status/stop` 外，启动或恢复调度前先调用状态脚本 `-Action BootstrapProbe`，从返回配置读取唯一间隔并固化 route、state、task hash 与分段计时；将 `coder_interval_seconds` 精确换算成 `/loop <N>m`。探针或配置失败即停。原 session 重进时再用既有绑定调用 `RefreshBudget`。
 - runtime 只按当前 session 的稳定一手 model/provider 证据分类为 `claude-native|claude-glm|other`；无法证明时用 `unknown`，并把依据传给 `Init -RuntimeEvidence`，不得从旧对话或自报身份猜原生。
-- 陪审命中公共协议扳机时，用一次性只读 `Task(mc-expert)`；调用正文必须交齐公共协议规定的四字段。不得建立常驻 teammate。调用失败也不得 `WaitHuman`，须把证据交给 planner。
+- 陪审命中公共协议扳机时，用一次性只读 `Task(mc-expert)`；调用正文按共享 `review-contract-v2.md` 交齐 v2 六字段，固定 `REVIEW_PROFILE=HISTORY`。HISTORY 不得当最终 gate。不得建立常驻 teammate；调用失败也不得 `WaitHuman`，须把证据交给 planner。
 - 自主接力中不得调用 `AskUserQuestion`。普通决策直接按公共协议默认顺序自走；真正人工硬门走非阻塞 `WaitHuman`。
 - 周期调度只用 Claude Code 内建 `/loop`，间隔使用本次从配置固化的具体 `<N>m`。job 提示词以唯一标记 `[double-coder]` 开头，并要求执行本 skill 的“单轮调度”；禁止 shell 常驻循环或 `Start-Sleep`。
 - `running + turn=planner` 与连续多轮 state 不变都是正常等待；必须保留 `[double-coder]` loop，不得据此停掉调度或要求用户重新启动 coder。

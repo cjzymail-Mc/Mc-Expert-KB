@@ -19,7 +19,7 @@ description: 让 Codex 在当前 Git repo 中担任双窗口接力 coder。用�
 - 新 Goal 必须严格执行公共协议的 `CODEX_GOAL_BRIDGE_V1`：用状态脚本 `GoalContract -CodexJsonEnvelope` 生成单行 JSON 信封，且 `env.envelope` 必须精确等于 `DOUBLE_SESSION_CODEX_GOAL_ENVELOPE=v1`，不得拿流程名代替字段值。校验后把完整 `goal_objective` **逐字**作为 `create_goal.objective`；严禁 Base64、`atob`、`btoa`、`Buffer` 或其他自创编码桥。该契约固化 repo/run/role/token，并要求每次 Goal continuation 在任何 state 动作前重新完整读取当前 live skill、公共 protocol 和 Config；live 文件覆盖 Goal 中旧流程文字。
 - Goal 只在无新任务的 `done|cancelled` 完成；`paused_budget`、`wait_human`、轮到 planner、state 多轮不变、`store()` 为空都不得 `complete|blocked`。未轮到时调用状态脚本 `WaitTurn`（传刚观察到的 seq 与本次固化的 `coder_wait_seconds`）；合法交棒可提前返回，超时按原周期复查。除这个公共脚本的单次有界 `WaitTurn` 外，不得用 shell 常驻循环、sleep、后台进程代替。
 - `WAITTURN_UX=SILENT_UNTIL_RETURN`：同一个 `WaitTurn` 工具 cell 尚未返回时，不得主动输出“继续监听 / 仍在运行 / 等待中”等重复自然语言心跳，也不得仅为心跳重新读取业务 state。只在收到合法 Handoff/Done 信号、达到完整 `TimeoutSeconds` 或异常退出时报告一次；平台自动工具状态不冒充业务进度，也不承诺由 skill 隐藏。
-- 命中公共陪审扳机时，先完整读取 `$env:USERPROFILE\.agents\skills\_mc-common\codex-runtime-bindings.md` 与 `$env:USERPROFILE\.codex\agents\mc-expert.toml`，再用 native custom agent `mc-expert`、`fork_turns=none`、四字段合同做一次性只读陪审。无 native surface 或调用失败也不得 `WaitHuman`，须把证据交给 planner；不得用 `codex exec` 冒充。
+- 命中公共陪审扳机时，先完整读取 `$env:USERPROFILE\.agents\skills\_mc-common\codex-runtime-bindings.md` 与共享 `review-contract-v2.md`、按 provider route 选择唯一 user-scope mc-expert profile，再用 native custom agent `mc-expert`、`fork_turns=none`、v2 六字段 envelope（`REVIEW_PROFILE=HISTORY`）做一次性只读咨询。HISTORY 不得当最终 gate。无 native surface 或调用失败也不得 `WaitHuman`，须把证据交给 planner；不得用 `codex exec` 冒充。
 - 自主接力中不得请求普通用户决策。普通可逆事项按公共协议默认顺序自走并记录；权限动作后置，真正人工硬门非阻塞停机。
 
 ## 启动 Goal

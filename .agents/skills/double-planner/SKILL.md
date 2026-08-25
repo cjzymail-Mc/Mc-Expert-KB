@@ -36,6 +36,6 @@ description: 让 Codex 在当前 Git repo 中担任双窗口接力 planner。用
 10. `running + turn=coder`：用同一 `WaitTurn` 调用等待 signal 或 timeout，返回后复查，不碰 `temp.md`。
 11. `running + turn=planner`：完整执行公共协议的 planner 单轮；安全交棒若返回暂停，只结束本次自动续轮，保留可 Continue 的原 Goal。
 
-最终候选 PASS 必须逐条按冻结 `done_when` 原文独立取证；可靠失败类判据构造反例真跑，`STATIC_ONLY` 不能 Done。先调用 `RecordGateResult -ReviewGateActor planner`。state 的 `effective_review_gate=planner_plus_mc_expert` 时，再按公共四字段合同调用一次只读 `mc-expert`，prompt 只给原始证据与待判问题，不喂 planner 的 PASS 预判；记录其结果后才调用 `Done`。两次同 `ReviewFailureKey` 的 transport failure 命中熔断，不降级单门。
+最终候选 PASS 必须逐条按冻结 `done_when` 原文独立取证；可靠失败类判据构造反例真跑，`STATIC_ONLY` 不能 Done。先调用 `RecordGateResult -ReviewGateActor planner`。state 的 `effective_review_gate=planner_plus_mc_expert` 时，按公共 `review-contract-v2.md` 另起 fresh 只读 `mc-expert`，用 `REVIEW_PROFILE=ENHANCED_FINAL` 交齐最终 artifact+hash、冻结需求、用户风险 envelope、live baseline、原始证据与未判范围；不喂 planner 的 PASS 预判。只认 `GO + HASH_VALIDITY=VALID + UNVERIFIED_SCOPE=NONE + 承重检查全过`，再记录结果并调用 `Done`；缺用户风险分类先进入 `WAIT_USER_RISK_CLASSIFICATION`。两次同 `ReviewFailureKey` 的 transport failure 命中熔断，不降级单门。
 
 第一次收到某 `failure_key` 必须核查并 REWORK；只有 state 机械记录两个独立 coder 回合同 key 后才可 `WaitHuman`。不同 key 不累计。

@@ -101,7 +101,7 @@ mode 选定后、进入执行调度前，在当前上下文显式冻结并校验
 | AskUserQuestion（today §1 第0步门） | 普通 TUI 输出一次问题等用户答；active Goal 消费初始 objective 的 `TODAY_MODE=1/2` 精确令牌，不在自动续接回合内假等待 | 模拟非原生 |
 | 全托管“托管给 mc-expert”（today §1 / core §1、§2.1） | 按共同 binding 走独立只读 reviewer：native 优先；仅冻结合同明确授权时可用 isolated subprocess fallback | 独立效果等价，路由留痕不同 |
 | 深度授权(B)权限后置门（today §1 红线①②类不中途发起） | Goal 前一次性 authorization pack + Goal 内不新增审批请求；`auto_review` 仅作意外后备 | 部分等价（路径不同） |
-| Task(mc-expert)（core §1.1 门3 / §1.2 / §2.1） | 按共同 binding 读取 `$env:USERPROFILE/.codex/agents/mc-expert.toml`，显式选择 `agent_type=mc-expert` + `fork_turns=none` | user-scope custom agent，路由可验证 |
+| Task(mc-expert)（core §1.1 门3 / §1.2 / §2.1） | 按共同 binding 依据 provider route 读取 `$env:USERPROFILE/.codex/agents/mc-expert.toml` 或 `.codex-glm/agents/mc-expert.toml`，显式选择 `agent_type=mc-expert` + `fork_turns=none` | user-scope custom agent，路由可验证 |
 | Agent Teams（core §1.1 门2） | full-unattended 在 PRE-GO pack 先冻结是否分工、允许角色与并发上限；Goal 内只按已批拓扑执行，新增拓扑需求 `WAIT_HUMAN` | 不同形、预授权替代中途人门 |
 | Explorer subagent（core §1.1 门4） | Codex 内置 explorer subagent | 等价 |
 | autopilot_failcount.ps1（core §2.2） | `$env:USERPROFILE/.agents/skills/_mc-common/codex-failcount.ps1`（见下熔断节） | 部分等价 |
@@ -115,7 +115,7 @@ mode 选定后、进入执行调度前，在当前上下文显式冻结并校验
 
 ## mc-expert 经验陪审（全托管决策通道 · 硬执行 · 禁跳）
 
-母本出现 `Task(mc-expert)`，或全托管执行途中出现普通模式本来会问用户、且会实质改变方案/范围/验收的决策点时，按共同 binding 执行。prompt 必须交齐共同 binding §2.1 四字段，并要求 reviewer：① 完整读取并遵守 `$env:USERPROFILE/.codex/agents/mc-expert.toml`；② 按仓库入口读取相关 memory/KB；③ 检查当前主线 anchor；④ 只读输出历史依据、明确推荐、风险与置信度；⑤ 低置信仍按“已封默认 > 历史成功率 > 易回滚”给一个默认推荐。主 agent 默认采纳该推荐，非按置信度数值机械选项；四红线/合同人工门除外。
+母本出现 `Task(mc-expert)`，或全托管执行途中出现普通模式本来会问用户、且会实质改变方案/范围/验收的决策点时，按共同 binding 执行。开工/中途咨询 prompt 必须交齐共同 binding §2.1 的 v2 六字段并写 `REVIEW_PROFILE=HISTORY`，要求 reviewer：① 按 provider route 读取并遵守唯一 user-scope profile 与共享 `review-contract-v2.md`；② 按仓库入口读取相关 memory/KB；③ 检查当前主线 anchor；④ 只读输出历史依据、明确推荐、风险与置信度；⑤ 低置信仍按“已封默认 > 历史成功率 > 易回滚”给一个默认推荐。主 agent 默认采纳该推荐，非按置信度数值机械选项；四红线/合同人工门除外。HISTORY 只做咨询，不得冒充最终验收；若本任务命中共同 binding §2.2 的增强终审触发器，最终另起 fresh `ENHANCED_FINAL`。
 
 Native 路由出现 `No agents completed yet` 只记 `PENDING` 并继续 bounded poll，不计 transport failure。isolated subprocess 只有调用方冻结合同和 authorization pack 明确声明时才可作第二路；留痕必须区分 route，不得把它写成 native child。
 

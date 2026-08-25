@@ -31,6 +31,6 @@ description: 让 Claude 在当前 Git repo 中担任双窗口接力 planner。�
 4. 无新任务的 `done|cancelled`：不得读 `temp.md`；用 `CronList`/`CronDelete` 取消本 session 唯一 `[double-planner]` job 并报告状态。
 5. `wait_human`：保留本 session 唯一 `[double-planner]` loop，只等合法控制入口；只查 state，不碰 `temp.md`。`paused_budget`：删除 loop 但保留原 session 绑定，提示在两个原 session 输入“继续”；不得要求新开窗口或换 token。
 6. `running + turn=coder`：结束本轮，只等 state，不碰 `temp.md`。
-7. `running + turn=planner`：完整执行公共协议的 planner 单轮。`REWORK` 后继续 loop。候选 PASS 逐条按冻结 `done_when` 取证，可靠失败类构造反例真跑，先 `RecordGateResult` 记录 planner 结果；有效门为双门时再调用只读 `mc-expert` 且不喂 planner 预判，记录第二门。只有 state 机械允许才 `Done` 并取消 loop。
+7. `running + turn=planner`：完整执行公共协议的 planner 单轮。`REWORK` 后继续 loop。候选 PASS 逐条按冻结 `done_when` 取证，可靠失败类构造反例真跑，先 `RecordGateResult` 记录 planner 结果；有效门为双门时按共享 `review-contract-v2.md` fresh 调只读 `mc-expert`，固定 `REVIEW_PROFILE=ENHANCED_FINAL`，交齐最终 artifact+hash、冻结需求、用户风险 envelope、live baseline、原始证据与未判范围，且不喂 planner 预判。只认严格 GO；缺用户风险分类先 `WAIT_USER_RISK_CLASSIFICATION`。记录第二门后，只有 state 机械允许才 `Done` 并取消 loop。
 
 第一次收到某 `failure_key` 必须核查并 REWORK；只有 state 机械记录两个独立 coder 回合同 key 后才可 `WaitHuman`，不同 key 不累计。

@@ -16,18 +16,31 @@ resolver 优先 `CLAUDE_SKILL_MASTER_DIR`，其次 sibling `Mc-Expert-repo`。`M
 
 全托管中，只有“普通模式本来会问用户、且会实质改变方案/范围/验收”的决策才进入 mc-expert；普通实现细节不逐项陪审。reviewer 必须只读、使用新上下文，并返回历史依据、明确推荐、风险与 `high/medium/low` 置信度。主 agent 采用 reviewer 的**明确推荐**，不是从多个选项里机械挑“置信度最高者”；低置信仍按“已封默认 > 历史成功率 > 易回滚”给出一个默认方案。命中四红线或合同人工门时不得自动采纳。
 
-### 2.1 mc-expert user-scope profile 与调用合同（spawn 前硬门）
+### 2.1 mc-expert user-scope profile 与 review contract v2（spawn 前硬门）
 
-Codex personal custom agent 的固定入口是 `$env:USERPROFILE/.codex/agents/mc-expert.toml`。本机该目录由 junction 指向 Git 母本 `Mc-Expert-repo/.codex/agents/`；profile 不可读时返回 `REVIEW_PROFILE_UNAVAILABLE`，不得退回模型记忆或 repo-local 旧副本冒充 user-scope mc-expert。
+Codex personal custom agent 按当前 provider route 选唯一入口：可核实 `$env:CODEX_GLM_PROVIDER_ROUTE` 非空时用 `$env:USERPROFILE/.codex-glm/agents/mc-expert.toml`，否则用 `$env:USERPROFILE/.codex/agents/mc-expert.toml`。两目录分别由 junction 指向 Git 母本 `Mc-Expert-repo/.codex-glm/agents/` 与 `Mc-Expert-repo/.codex/agents/`；profile 不可读时返回 `REVIEW_PROFILE_UNAVAILABLE`，不得跨 route 偷换另一份 profile、退回模型记忆或 repo-local 旧副本冒充 user-scope mc-expert。
 
-主 agent 每次启动 reviewer 前必须先读取该 user-scope profile，并在 task prompt 中交齐以下四项；缺一时**不得 spawn**，直接返回 `REVIEW_CONTRACT_INVALID missing=<字段>`：
+增强终审的共享权威是 `D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.agents/mc-expert-common/review-contract-v2.md`。主 agent 每次启动 reviewer 前必须先读取 user-scope profile 与该共享 contract。新调用 prompt 至少交齐以下六项；四个核心字段缺一时**不得 spawn**，直接返回 `REVIEW_CONTRACT_INVALID missing=<字段>`：
 
-1. `REVIEW_TARGET`：精确文件路径、方案或范围；
-2. `PROJECT_MEMORY`：已读取的相关项目 memory 路径 + 与本决策有关的完整段落；确无相关项时写 `NONE: <原因>`；
-3. `SEALED_DECISION_QUERY`：要在中央 KB `decisions/` 核对的决策名、关键词或问题；确无相关项时写 `NONE: <原因>`；
-4. `REVIEW_QUESTION`：一个且仅一个明确陪审问题。
+1. `REVIEW_PROFILE`：`HISTORY|ENHANCED_FINAL`；
+2. `AUTHOR_RUNTIME`：`NATIVE_CODEX|CODEX_GLM|NATIVE_CLAUDE|CLAUDE_GLM|OTHER`，指被审产物作者；
+3. `REVIEW_TARGET`：精确文件路径、方案或范围；
+4. `PROJECT_MEMORY`：已读取的相关项目 memory 路径 + 与本决策有关的完整段落；确无相关项时写 `NONE: <原因>`；
+5. `SEALED_DECISION_QUERY`：要在中央 KB `decisions/` 核对的决策名、关键词或问题；确无相关项时写 `NONE: <原因>`；
+6. `REVIEW_QUESTION`：一个且仅一个明确陪审问题。
 
-调用方不得只写“帮我陪审”。当前 native surface 暴露 custom-agent selector 时，必须同时使用 `agent_type=mc-expert` 与 `fork_turns=none`；full-history fork 会继承父 agent type，不能再指定 custom agent。若 surface 只有通用 native child，task prompt 还必须要求 child 先完整读取 user-scope profile，再执行同一个四字段合同。两条路的报告都必须在“历史依据”中给出：
+旧四字段调用只兼容为 `HISTORY + OTHER`，不得用于最终 PASS/GO/发布判断。`ENHANCED_FINAL` 还必须交齐 `RISK_CLASS / RISK_OWNER / RUNTIME_POLICY / ARTIFACT_MANIFEST / REQUIREMENTS / LIVE_BASELINE / VERIFICATION_EVIDENCE / UNVERIFIED_SCOPE`；caller 在 spawn 前先验证路径存在并计算 SHA-256，不能只交一份作者自评报告。
+
+### 2.2 人工风险准入与两种触发策略
+
+风险主判属于用户：增强终审只接受 `RISK_OWNER=USER`。缺用户分类时返回 `WAIT_USER_RISK_CLASSIFICATION`；主 agent 不替用户猜 MEDIUM/HIGH，也绝不能把用户 HIGH 降级。runtime 用当前 turn 一手 provider route：`CODEX_GLM_PROVIDER_ROUTE` 有非空可核值时是 `CODEX_GLM`；可证明 OpenAI 原生 route 时是 `NATIVE_CODEX`；无法证明写 `OTHER`，不得按模型文风推测。
+
+- **Codex-GLM**：用户 MEDIUM 才允许进入施工，最终强制 `ENHANCED_FINAL`；用户 HIGH 直接 `CUTOVER_NATIVE_REQUIRED`。MEDIUM 若命中共享 contract §3.2 的机械高风险疑似否决器，也先升级为 `HIGH_SUSPECTED` 并要求切原生。
+- **原生 Codex**：普通路线咨询保持 `HISTORY`；用户 HIGH，或改共享母本/junction/全局 skill·agent·hook·protocol、迁移、权限安全、发布、跨环境接口等高影响变更，最终强制 `ENHANCED_FINAL`。最高后果按共享 contract 再加原生 Claude 或用户跨栈终签。
+
+`HISTORY` 只能输出咨询建议与 `FINAL_REVIEW=NOT_PERFORMED`。最终放行必须满足：`VERDICT=GO`、review 前后 artifact hash 相同且匹配 manifest、`UNVERIFIED_SCOPE=NONE`、共享 contract 八个承重审计面全部通过。`GO_WITH_CHANGES` 是修后重审，不是条件通过。
+
+调用方不得只写“帮我陪审”。当前 native surface 暴露 custom-agent selector 时，必须同时使用 `agent_type=mc-expert` 与 `fork_turns=none`；full-history fork 会继承父 agent type，不能再指定 custom agent。若 surface 只有通用 native child，task prompt 还必须要求 child 先完整读取 user-scope profile 与共享 contract，再执行同一个 envelope。两条路的报告都必须在“历史依据”中给出：
 
 - `KB_INDEX=D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/MEMORY.md`
 - 至少一个实际读取的 `KB_EVIDENCE=<具体档案路径>`；确无相关档案时，明确写 `KB_EVIDENCE=NONE` 及检索范围。

@@ -45,7 +45,7 @@ caller 调本 core 时，core 先校验从 args 收到的入参：
 2. 【team task 门】任务是否是「多步实现类、需要 plan→挑刺→实现→复审」的活,或要改多文件/有架构取舍、值得 planner/mc-expert/coder 小队?
    - 是 → **停下,不要自己建队、也不要自己直接开干**;向用户说明「此任务复杂度够 team,建议走 /team-task」+ 一句理由,等用户确认后再动。**mode=autopilot 也不例外**:升级到 team 是难度判断、始终留给用户;caller_id=today-loop 交的 contract 即便 mode=autopilot、也不要自动闯过 team 门、不替用户决定转不转 team。
    - 否(轻量任务,单点改动/查询) → 进入下一步,自己干
-3. 【mc-expert 咨询门 · 中等档(team 与单干之间)】没够 team 门、本可自己干,但**你拿不准 / 犹豫不决**,或命中 mc-expert 任一触发条件——**重大技术选型 / 改核心文件(CLAUDE.md、本 repo 的 plan*.md / agent 定义 / 若是 KB repo 则含 principles·reflexes·repo-map·decisions·references)/ 同一问题已连续失败 2 次**——则**别完全单干**:先 `Task(subagent_type=mc-expert)` 咨询(带改动背景),拿到「历史依据+建议+风险+置信度」再动手或再收尾。
+3. 【mc-expert 咨询门 · 中等档(team 与单干之间)】没够 team 门、本可自己干,但**你拿不准 / 犹豫不决**,或命中 mc-expert 任一触发条件——**重大技术选型 / 改核心文件(CLAUDE.md、本 repo 的 plan*.md / agent 定义 / 若是 KB repo 则含 principles·reflexes·repo-map·decisions·references)/ 同一问题已连续失败 2 次**——则**别完全单干**:先 `Task(subagent_type=mc-expert)`，按共享 `review-contract-v2.md` 交齐 `REVIEW_PROFILE=HISTORY / AUTHOR_RUNTIME / REVIEW_TARGET / PROJECT_MEMORY / SEALED_DECISION_QUERY / REVIEW_QUESTION`，拿到历史建议再动手。HISTORY 只做开工/中途咨询，不冒充最终终审。
    - **mode=normal(普通档)**:mc-expert 置信度低时按其建议升级给用户;真正琐碎、无疑义的改动才直接自己干。
    - **mode=autopilot(全托管档)**:拿到裁决后**直接照办、继续往下,不回头问用户**。**置信低/无先例不再升级**——采纳 mc-expert 的默认推荐(默认>成功率最高>最易回滚)继续,记进收尾「自主裁决」清单。只有 4 红线才停(见 §3.2:销毁性删除 / 对外交付·Ldterm 明文 / 连失 2 次 / 推翻已封决策)。**连失 2 次熔断优先**:计数到 2 一律转人工审,不再让 mc-expert 续命(见 §3.2)。
    - 注:本门是开工/收尾前的**自觉前门**;若本 repo 装了 mc-expert Stop-hook,收尾时还有 harness 兜底,两者互补——不要因为有 hook 就在该犹豫时跳过咨询。
@@ -59,7 +59,7 @@ caller 调本 core 时，core 先校验从 args 收到的入参：
 
 - 场景:任务在门 2/门 3 判为轻量、已走"自己干",执行途中却临时冒出一个本来要停下问你的决策点(A 还是 B / 要不要顺手改某处 / 口径拿不准)。门 3 是开工前的前门,接不住这种途中才浮现的;本条专补这段。
 - **mode=normal(普通档)**:照常停下问你,行为不变。
-- **mode=autopilot(全托管档)**:**别停下问用户**——先 `Task(subagent_type=mc-expert)` 带背景把这个决策点丢过去咨询,拿「历史依据+建议+风险+置信度」后直接照办、继续往下。**置信低/无先例同样不升级**,采纳其默认推荐继续 + 记进收尾「自主裁决」清单;口径同门 3——只有 4 红线才停,连失 2 次熔断优先,转人工审(见 §3.2)。
+- **mode=autopilot(全托管档)**:**别停下问用户**——先按门 3 的 v2 六字段 envelope 调 `Task(subagent_type=mc-expert)`，固定 `REVIEW_PROFILE=HISTORY`，拿历史建议后直接照办、继续往下。**置信低/无先例同样不升级**,采纳其默认推荐继续 + 记进收尾「自主裁决」清单;只有 4 红线才停,连失 2 次熔断优先,转人工审(见 §3.2)。若最终产物命中共享 contract 的原生高影响/GLM 中风险终审门，必须另起 fresh `ENHANCED_FINAL`，不能拿本次 HISTORY 抵扣。
 - 边界:只接管"本可自己拍的小决策"。若该决策点意味着任务其实升格到 team(改多文件 / 架构取舍),回门 2——升级到 team 始终留给用户,autopilot 不闯。
 
 ### §1.3 效率规则

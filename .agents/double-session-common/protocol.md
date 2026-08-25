@@ -110,7 +110,7 @@ runtime_evidence: <first-hand evidence or provider_not_proven>
 
 runtime 只接受一手、稳定的当前平台 model/provider 证据；没有稳定 provider 字段或无法证明原生时必须记 `unknown`。有效门取 planner 与 coder 两端更严格者：两端都能证明为 `claude-native|codex-native` 才是 `planner_only`；任一端为 GLM、other 或 unknown 都是 `planner_plus_mc_expert`，执行中不得降级。
 
-planner 对冻结 `done_when` 逐条独立取证；报告、自述和 docstring 只算二手。可靠失败、缺失即中止和 fail-closed 判据必须构造反例真跑；证据状态只用 `PASS_DYNAMIC / STATIC_ONLY / FAIL / BLOCKED`，`STATIC_ONLY` 不得 Done。候选 PASS 后先调用 `RecordGateResult -ReviewGateActor planner -ReviewGateResult pass`；双门时再以只给原始证据、不喂 planner 预判的方式调用一次 `mc-expert`，然后记录其结果。`Done` 机械要求 planner pass；双门还要求 mc-expert pass。REWORK/FAIL/BLOCKED、陪审不可用或证据不全不得降级。相同 `ReviewFailureKey` 的第二次 transport failure 由 state 机械转入 `wait_human` 两连失熔断。
+planner 对冻结 `done_when` 逐条独立取证；报告、自述和 docstring 只算二手。可靠失败、缺失即中止和 fail-closed 判据必须构造反例真跑；证据状态只用 `PASS_DYNAMIC / STATIC_ONLY / FAIL / BLOCKED`，`STATIC_ONLY` 不得 Done。候选 PASS 后先调用 `RecordGateResult -ReviewGateActor planner -ReviewGateResult pass`；双门时再按共享 `review-contract-v2.md` 以 fresh 只读上下文调用一次 `mc-expert`，显式 `REVIEW_PROFILE=ENHANCED_FINAL`，只给冻结需求、最终 artifact+hash、live baseline 与原始证据，不喂 planner 预判。风险分类必须来自用户；冻结任务没有 `RISK_CLASS/RISK_OWNER=USER` 时先 `WAIT_USER_RISK_CLASSIFICATION`，不得让 reviewer 猜。只有 mc-expert 返回 `GO + HASH_VALIDITY=VALID + UNVERIFIED_SCOPE=NONE + 承重检查全过` 才记录 pass。`Done` 机械要求 planner pass；双门还要求 mc-expert pass。REWORK/FAIL/BLOCKED、陪审不可用或证据不全不得降级。相同 `ReviewFailureKey` 的第二次 transport failure 由 state 机械转入 `wait_human` 两连失熔断。
 
 ## 共同不变量
 
@@ -157,7 +157,7 @@ coder 采用深度授权 B 模式，但不调用 `/free` 或 `$free`，也不运
 
 1. 全程禁止 `AskUserQuestion` 或等价的中途用户问询。普通可逆决策按“已封默认 > 历史成功率 > 最易回滚”自主执行，并记入交接。
 2. 只在重大技术选型、修改核心配置/agent/skill/已封决策相关文件、拆分任务前、第一次实质失败后准备第二次尝试、或高风险/低置信/验证未闭的关键交棒前，启动一次性只读 mc-expert；普通机械修改不调用，不建常驻 agent。
-3. mc-expert 调用必须在 `Consume` 和读取冻结任务之后、修改之前，交齐 `REVIEW_TARGET / PROJECT_MEMORY / SEALED_DECISION_QUERY / REVIEW_QUESTION`，且一次只问一个问题。调用终态失败最多重试一次；第二次失败按两连失熔断。
+3. 开工前 mc-expert 调用必须在 `Consume` 和读取冻结任务之后、修改之前，按共享 `review-contract-v2.md` 交齐 `REVIEW_PROFILE=HISTORY / AUTHOR_RUNTIME / REVIEW_TARGET / PROJECT_MEMORY / SEALED_DECISION_QUERY / REVIEW_QUESTION`，且一次只问一个问题；HISTORY 不得冒充最终 gate。调用终态失败最多重试一次；第二次失败按两连失熔断。
 4. coder 永久禁止调用 `WaitHuman`。权限疑问、风险、低置信、缺少默认值、mc-expert 不可用、单次技术失败或命中上层硬拒绝，都只能停止相关动作并交给 planner。
 5. 正常轮：`CheckBudget -Role coder` → `Consume -Role coder` → 读 `.copilot-task.md` → 实施与验证 → 写 `temp.md`。成功时验非空后调用 `Handoff -Role coder -To planner -HandoffKind success`。
 6. 失败轮：交接必须包含稳定 `failure_key`、实际错误、证据路径、本轮实质方案、未满足的 `done_when`、建议 planner 核查点，以及累积清单 `AUTONOMOUS_DECISIONS / PENDING_HUMAN_NONBLOCKING / OPEN_BLOCKERS`；然后调用 `Handoff -Role coder -To planner -HandoffKind failure -FailureKey <key>`。

@@ -64,7 +64,7 @@ SELECT → PREFLIGHT → BUILD → SELF_CHECK → JURY → CHECKPOINT
 
 today-loop 把 mode 钉死 autopilot，所以 today-core §1.1 门3 / §1.2 途中决策 / §2.1 收尾决策 / §2.2 两连败**四面全部走 autopilot 分支**，且这根 mode 贯穿多 plan（每个 plan 内部 + plan 之间都同纪律）。铁律：
 
-- **中途零弹窗**：运行中（kickoff 之后、三终态之前）任何决策点——含**没有用户给定默认的拍板点、口径拿不准、要不要顺手改某处**——都**不弹 AskUserQuestion、不因 contract 的 human_gates 语义门自觉停**。先 Task(mc-expert) 带背景咨询，拿「历史依据+建议+风险+置信度」后**直接照办继续**。
+- **中途零弹窗**：运行中（kickoff 之后、三终态之前）任何决策点——含**没有用户给定默认的拍板点、口径拿不准、要不要顺手改某处**——都**不弹 AskUserQuestion、不因 contract 的 human_gates 语义门自觉停**。先按共享 `review-contract-v2.md` 用 v2 六字段 envelope 调 `Task(mc-expert)`，固定 `REVIEW_PROFILE=HISTORY`，拿历史建议后**直接照办继续**；HISTORY 不抵扣命中增强触发器后的 fresh `ENHANCED_FINAL` 终审。
 - **置信低/无先例也不升级用户**（today 深度授权语义，区别于 today-core normal 档的"无默认才停"）：mc-expert 给不回高置信，照样采纳它给的默认推荐（默认 > 成功率最高 > 最易回滚）继续，**不回头问用户**。把该裁决记进收尾「自主裁决」清单。
 - **真硬依赖才转 WAIT_HUMAN**（四步顺序，codex 陪审第3点补强）：自主轴不等于"永不转 WAIT_HUMAN"。运行中遇到决策，按序尝试——
   1. 能 inspect / 盘点的自己查（现状、文件清单、现状参数）；
