@@ -41,7 +41,7 @@
 
 ## 环境硬约束（详见 reflexes.md）
 
-- **Office 文件（2026-06-15 起，新机器 Ldterm DLP 已解除）**：默认走 Python（openpyxl/python-docx/python-pptx）、文件默认明文；**遇加密文件 = 例外 → 跳过 + 记录 + 报告用户**，不 STOP/不换库硬试。COM 只留视觉渲染/导图/复杂染色，及回到 DLP 机器时的条件性回退。详见 reflexes.md「Office 文件路径」。
+- **Office 文件（2026-06-15 起，新机器 Ldterm DLP 已解除）**：默认走 Python（openpyxl/python-docx/python-pptx）、文件默认明文；**遇加密文件 = 例外 → 跳过 + 记录 + 报告用户**，不 STOP/不换库硬试。COM 只留视觉渲染/导图/复杂染色，及回到 DLP 机器时的条件性回退。**分发场景按目标机折算**——为别的机器开发产物/skill 时，路线按产物最终落地机器的加密状态判、不按本机（见 reflexes.md「Office 文件路径」元规则，2026-08-14 Agent-3 双环境生产）。详见 reflexes.md「Office 文件路径」。
 - 改 settings/配置文件**先备份 .bak**；**推广到任何会覆写持久产物的操作**（miner/pipeline/`--regenerate` 类生成器默认写固定 outdir，重跑=覆盖）→ 先备份或改写临时 outdir，验「脚本还能不能跑」用零副作用路径（直调纯函数/临时目录），别跑写盘的全量分支。**执行体（coder/subagent）已白纸黑字标注的风险警示要当一等信号采纳，别无视重跑。**〔Mc-emoji feature-05，2026-07-01：全量重跑 miner 把 Jun-30 全语料 gold 覆盖，coder 报告里已警告过〕
 - 权限用**方案 A**（`Bash(*)/PowerShell(*)` 通配 allow + `rm/Remove-Item` 进 ask），**不主动开 bypassPermissions**。
 

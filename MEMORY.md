@@ -29,9 +29,10 @@
 - [cc-command-skill-resolution](references/cc-command-skill-resolution.md) — CC command/skill 同名解析（同名时 `/slash` 直达 skill、command 壳成死代码；升级删壳或错开命名 chop→chop-task；today 升 skill 实测推翻「留壳必要」陪审判断）〔Mc-emoji 2026-07-12，易过期〕
 - [claude-codex-memory-difference](references/claude-codex-memory-difference.md) — Claude vs Codex 跨会话 memory 加载机制差异（Claude harness 原生强送达 MEMORY.md 索引 vs Codex 原生只载 AGENTS.md 指令链、local Memories 默认关不读 Claude auto-memory）+ 软指针(候选A)够用 + 别为理论完整提前上 hook 的 5 痛点门槛 + 易踩措辞坑。配 [[dual-tool-single-source]]。〔Mc-emoji 2026-07-19 三路实测，易过期〕
 - [auto-memory-index-hook-convention](references/auto-memory-index-hook-convention.md) — auto-memory 的 MEMORY.md 索引钩子写法规范（钩子=相关性触发器非摘要 / 三类「源XXX」区分 / ★ 承重语义保留 / 订正卡保守保留 / 瘦身配召回阳性对照 / 实测 15854→14248）。配 [[kb-memory-boundary]]·[[claude-codex-memory-difference]]。〔Mc-emoji 2026-07-29 瘦身+陪审，核实 2026-08-05，易过期〕
+- [cc-skill-authoring](references/cc-skill-authoring.md) — CC skill 编写机制事实（args 按 shell-style quoting 切位置参数、多词裸传静默截断 → caller 固定 `'<mode> "<task>"'`；`$ARGUMENTS`/`$0`/named placeholders 全文展开、说明文字字面量须 `\$` 转义）〔Mc-emoji feature-05 plan11 三组 probe，核实 2026-07-16，易过期〕
 
 ## agents/ — KB 自带 subagent
-- [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 只读规划、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
+- [planner](.claude/agents/planner.md) · [coder](.claude/agents/coder.md) — Stage 3 Agent Team spike 的两个 teammate（planner=opus 规划+只读取证（有 Bash、无 Edit/Write，2026-08-19 一手实测）、coder=sonnet 实现）。同住被 junction 的 agents 文件夹 → 全局 user-scope 可用。见 `Mc-emoji/[feature-03]/sub-plan-stage3-agentteam-spike.md`。
 - [mc-expert](.claude/agents/mc-expert.md) — 跨 repo 经验顾问/陪审（Stage 1 落地）。**物理母本**=repo 内 `.claude/agents/`（进 KB git、单一真相源）；**user-scope 发现**=3 账号 config 目录的 `agents/` 各 junction 指回此母本（yk `~/.claude` / mc `~/.claude-mc` / xh `~/.claude-xh`），2026-06-01 建立并实测 mc 账号从 repo 外 cwd 可发现。→ **任意账号、任意工作 repo 窗口都能 @mc-expert**（解锁 Stage 2 自动咨询）。`--add-dir` 仍只留给按需深挖源 repo。
 
 ## Stage 0 状态
@@ -159,13 +160,28 @@
 - **边界克制**：本轮不扫源 repo（用户限定）；references/ 两个游离中文草稿（收尾loop判据 / today完整版loop判据）维持 defer（07-19/07-23 既有决定，防 scope 蔓延）。
 - 未提交：用户手工 push。
 
+## 2026-08-25 收割轮（inbox 索引补账 + 双候选晋升 + 1 移送 · mc-expert 独立陪审）
+
+> 场景 = 用户「检查 kb-inbox」→ 发现 inbox MEMORY.md 索引漏登 2 条实际文件（proposal-claude-skill-args / proposal-planner-acceptance）→ 先补账，再按推荐走 /KB-update 收割 2 条 + 移送 1 条。**mc-expert 独立陪审（本会话重判、未采信提案内记录的前轮陪审）**：三条全 GO-with-changes，6 处修正全部采纳（假引「严禁 COM」删除 / 「执行机 vs 目标机」表述统一为「产物最终落地机器」 / 「CLI 版本见源 repo」假指针改如实标注 / 移送三必改 / 悬空指针 / 护栏判据）。
+
+- ✅ **① reflexes「Office 文件路径」节末 append 元规则**：反射前提 = 产物/脚本**最终落地执行**的那台机器；分发场景按目标机加密状态折算（目标机加密 = 命中既有「条件性回退」，别拿开发机明文判「默认 Python」）。源 = inbox `proposal-kb-reflex-needs-target-machine-premise`（Agent-3 Info Classifier 2026-08-14 双环境生产证伪：本机明文、面向同事的 skill 跑在加密机，用户原话「绝对表述必须附前提」；分支细节项目专属、留源 repo AGENTS.md §3.1）。
+- ✅ **①-附属 principles 环境硬约束同步一句**（维持该节 gist+指针双层 parity，防 L44 变成无前提绝对表述）：「分发场景按目标机折算」+ 指 reflexes 元规则。
+- ✅ **② 新建 `references/cc-skill-authoring`**：args 切分 + 占位符展开机制事实（裸多词静默截断 / caller 固定 quoted 写法 / `$ARGUMENTS` 全文展开、字面量 `\$` 转义 / 缺参=空可作 fail-loud）。源 = inbox `proposal-claude-skill-args-quoting-and-literals`（Mc-emoji feature-05 plan11 三组 probe 2026-07-16 + 官方文档明文背书）。第二层标注「官方文档+probe 双坐实」、CLI 版本如实标「未随 probe 记录（claude-glm 分发）」。
+- ✅ **③ 移送 `proposal-jury-prompt-no-feeding-conclusions` → Mc-emoji/.claude/auto-memory/**（兑现 08-05 已决「不收中央」欠账）：整文件移送 + frontmatter 改造（moved + KB 溯源）+ **对侧 MEMORY.md 索引登记**（防孤儿）+ 删 KB inbox 原件 + 修 `proposal-planner-acceptance` frontmatter 悬空指针（原硬引 KB inbox 路径 → 改指 Mc-emoji 新路径）。Mc-emoji origin（`.codex/memory-inbox/2026-07-16-*`）回写 accepted。
+- ✅ **inbox 索引补账**：MEMORY.md（inbox 版 + 会话记忆版）补登漏掉的 2 条，恢复索引与事实一致。
+- ⏸ **不晋升（维持留置）**：`proposal-planner-acceptance-scope-no-narrowing`（前置=第二不同领域 repo 命中 + 判据轴去 pptx 特化，未满足）；`proposal-team-task-funnel-risk-routing-pilot`（观察期，需 ≥3 跨形状真实 run）；`feedback_ppt_selfcheck`（已被 skill 覆盖，备查）。
+- **⚖️ 护栏判据（mc-expert 陪审要求写死，防「补前提」变绕闸话术）**：对既有节**只补隐含前提 / 收窄适用范围** = 维护性订正，**不受双 repo 闸门**（先例：2026-06-15 环境翻转整节改写同为单事件驱动）；**新增扳机/动作** = 新反射，仍须双 repo 命中（或 L28/L29 式「单 repo 起源+诚实标注」例外，已两个、从严开第三个）。本轮①按此判据归前者入的库。
+- **诚实计数**：①的跨 repo 实证 = **1**（Agent-3；project-archive-starter 是同 repo 内第二工件，不算跨 repo）——不满足双 repo，按上护栏归「既有节前提订正」入库，非新反射卡。
+- **留观（陪审提出、下轮巡检核）**：`cc-command-skill-resolution` 也含「CLI 版本见源 repo」句式，若源同样未记版本 = 同类假指针，下轮顺带核、不扩本轮 scope。
+- 未提交：用户手工 push。
+
 ## 巡检台账（KB-update 前置扫描基线）
 
 > 用途：KB-update「前置发现巡检」读此台账拿基线，只扫各源 repo **晚于"扫描截止"日期**的过程文件（忽略 office/pdf/ai 原材料）。事件驱动调起（大 feature 收尾 / 事故复盘 / 感觉攒够了），**非定时自跑**。每轮巡检后更新本表 + 上面"收割轮"叙事段。
 
 | 源 repo | 扫描截止(基线) | 上次巡检 | 本轮结论摘要 |
 |---|---|---|---|
-| **本 repo inbox**（`.claude/auto-memory/`） | 2026-08-05 | 2026-08-05 | **08-05 复扫**（用户限定「只收割 kb-inbox」、不扫源 repo）：inbox 5 候选（排除 pin/）→ 收 ①(done_when 阳性对照→reflexes append)+③(pipeline AI 防篡改证据→SKILL.md 第5条)+④(索引钩子写法→references 新建)；不收 ②(陪审禁喂结论→留 Mc-emoji，单 repo 1 命中)+⑤(ppt 自检→已被 skill 覆盖)。①③④ 晋升后已删/回写 inbox（防双份漂移）。**07-23 历史**：本轮暴露巡检第一站应是本 repo inbox → 已修 KB-update step 1。**纪律**：inbox 里凡还没晋升的每轮都要重新过闸门、别只看新不新 |
+| **本 repo inbox**（`.claude/auto-memory/`） | 2026-08-25 | 2026-08-25 | **08-25 收割轮**（用户「检查 kb-inbox」触发，非全量巡检）：先补 inbox MEMORY.md 索引漏账 2 条（proposal-claude-skill-args / proposal-planner-acceptance）；再收 ①(Office 路径目标机元规则→reflexes append + principles 同步)+②(skill args 机制→references/cc-skill-authoring 新建)；移送 ③(陪审禁喂结论→Mc-emoji auto-memory，含对侧索引+origin 回写)；留置 planner-acceptance(双 repo 前置未满足)+team-task 漏斗(观察期)+ppt_selfcheck(已覆盖)。①② 晋升后已删、③ 移送后已删。mc-expert 三 GO-with-changes 全纳（含「补前提 vs 新例外」护栏判据，见收割轮叙事）。**纪律**：inbox 里凡还没晋升的每轮都要重新过闸门、别只看新不新。〔历史〕**08-05 复扫**：收 done_when 阳性对照+pipeline 防篡改+索引钩子写法，不收陪审禁喂结论+ppt 自检 |
 | `3rd-ppt-prj` | 2026-07-14 | 2026-07-20 | Stage 0 已深挖；**07-20 复扫**：晚于 07-14 仅 `.git/FETCH_HEAD`(元数据)，过程文件≤06-16，确认无新料。〔历史〕**07-14 复扫**仅 STATE 06-02 触碰(噪声)，过程文件≤06-02 |
 | `[Agent-3 Claude+Codex] Info Classifier` | 2026-07-20 | 2026-07-20 | **07-20 富矿**：07-15~20 双主线=①Codex 端机制适配(hooks/sandbox/auto_review/视觉子进程)②双工具单一真源+project-archive-starter 重建治理。收 T1(单一真源决策)+T7(视觉防幻觉,落 principles)。已否域内(染色/槽位/mapping/移植技法)。**07-14 复扫**(历史)：07-01 一簇 feature/skill 重触碰(域内)，无新 auto-memory，确认无新料 |
 | `[Agent-4] Wu Prj` | 2026-07-14 | 2026-07-20 | **07-20 复扫**：晚于 07-14 的文件=**0 个**（最新停 07-01 的 `.lock`，过程文件全 ≤06-30）。⚠️ **基线滞后提示**：07-14 基线切在该 repo 沉默期之后，06-29/06-30 最后一批 feedback（marker_prefix / deck_split_browextract / keygate_mc_expert_jury）按时间窗本应在更早轮覆盖——若日后怀疑漏收，可回查 06-28~06-30 窗口。本轮无新增可入。**07-14 复扫**(历史)：新增集中 deck/chart 产线域(域内不入)，收单发subagent掉线重试max1(append agent-teams)；〔历史〕富矿但本轮新增多为域内（deck/工艺单/竞品报告产线）。已入：task-decomposition / acceptance-ladder / 加密节D2 / python3D3 / 机器自检≠人工验收 / 沉淀分两轨 / solo-vs-team+陪审 / team残留config / autopilot-defer-perm-to-human-gate / **普适vs项目专属测试(06-26)**。已否：逐品类loop化、CLAUDE三层、派生层、复用核口径、deck域内(genre-skill/deliver-split)。借调 mc-emoji `feedback_kb_universal_vs_project_specific` 原出处 |
