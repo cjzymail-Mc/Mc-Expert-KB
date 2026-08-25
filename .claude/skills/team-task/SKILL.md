@@ -1,49 +1,83 @@
 ---
 name: team-task
-description: 用 Agent Team 执行任务的入口（类似 /today）。读取当前 repo 根目录的 team-task.md，先让用户选驱动模式（A 人工驱动 / B 深度放权），再按其建一个三角色协调小队（planner / mc-expert / coder）、维护根目录 team-progress.md，然后执行 team-task.md 的「本次任务」。用户输入 /team-task 时触发。
+description: Claude/GLM 风险增强执行入口。读取 repo 根 team-task.md，把零散输入漏斗成冻结合同，再让用户确认 MANUAL/AUTO 路由、T1/T2/T3 实际拓扑与 A/B 驱动；关键验收门保持独立复核。仅用户显式输入 /team-task 时触发。
+disable-model-invocation: true
+argument-hint: "[continue-defaults]"
 ---
 
 # team-task
 
-把"启用 agent team 干一件事"固化成一个命令。等价于 `/today`，但目标文件是 `team-task.md`、且强制走 team 工作流。
+把“零散 prompt → 人工风险准入 → 冻结合同 → 按任务形状执行 → 独立终审”固化成 Claude/GLM 风险增强入口。它不强制建队：实际拓扑为 T1/T2/T3，T4=AUTO 路由策略；本 skill 有写文件/建队副作用，只接受用户显式 `/team-task $ARGUMENTS`。
 
-## 触发后立刻做
+## 漏斗控制流（P0→P6；细则单源见 `funnel-gate.md`）
 
-1. **读当前 repo 根目录的 `team-task.md`**（`./team-task.md`）。读不到就停下报告"本 repo 根目录没有 team-task.md"，不要瞎建队。
-2. **先读完整份**——瘦身后它只定义 **repo 专属落点/边界 + 本次任务**；通用流程（第 0 步 A/B 驱动模式选择含 B 模式深度放权完整流程、团队结构、team-progress 归档与规则、收尾）= 本 skill 权威，见下各节。
-3. 看「本次任务」是否填了内容：
-   - **空** → 告诉用户"team-task.md 的『本次任务』是空的，请先填写"，不要自己编任务。
-   - **有** → 先归档上一轮 team-progress、再走第 0 步，然后建队执行。
-4. **归档上一轮 team-progress（建队前必做，先于覆写）**：扫 `team-progress/` 现有 `team-progress-NNN.md` 取最大序号 +1（补零三位，空目录从 `001`）→ 复制根 `team-progress.md` 进 `team-progress/team-progress-{NNN}.md`（路径含 `[]` 的 repo 用 `Copy-Item -LiteralPath` 或引号包裹、勿用 Office SaveAs），**确认复制成功**再继续 → 把根文件重置为最小骨架（标题 + 空的「进度日志/当前现状/下一步/卡点」+ 顶部面包屑 `> 上一轮已归档至 team-progress/team-progress-{NNN}.md，如需续接先读它`）。根文件不存在 / 只剩空骨架（无 `### 日期` 条目）则跳过。
-5. **第 0 步（建队前强制）**：用 AskUserQuestion 让用户二选一驱动模式 **A 人工驱动 / B 深度放权**（选项文案 + 落地见下「B 模式（深度放权）完整流程」节 = 本 skill 权威，不靠各 repo team-task.md），选定前不许建队。
+0. **P0 · run bootstrap（任何新写入前）**：只接受空参数或 `continue-defaults`，其它参数 fail-loud。完整读 `./team-task.md`；缺文件/「本次任务」空则停，不编任务。识别最后一个显式 source block；legacy 未标记输入只可无损包进 source marker，`source_block_id=src-<sha256前8位>`。生成 `run_id=YYYYMMDD-HHmmss-<source_sha前8位>`。
+   - 根 `team-progress.md` 命中同 `run_id+source_block_id` 且 `run_status=ACTIVE` → 按阶段标记重入；三者不匹配禁止跳段。旧台账 `run_status=COMPLETE|WAIT_HUMAN|HALTED` → 先按 NNN 规则归档、确认成功再重置；非空且无合法终态 → KO「旧 run 未收口」，**不写新标记**。
+   - 初始化头写 `run_id/source_block_id/contract_id(pending)/run_status=ACTIVE` + 漏斗行 + `P1已核事实`，并保留「进度日志/当前现状/下一步/卡点/漏斗默认·待确认/自主裁决(B)/OPEN_BLOCKERS/PENDING_HUMAN_NONBLOCKING/复盘位」骨架。每过一阶段立刻落盘，不攒到收尾。
+0.5. **P0.5 · 人工风险准入（P1 前硬门）**：按 `funnel-gate.md` 取得用户明确的 `risk_class=MEDIUM|HIGH`；写死 `risk_owner=USER`，AI 只能上调为 `HIGH_SUSPECTED`，不得把 HIGH 降级。`author_runtime` 只用当前 provider/config 的一手证据；无法证明就让用户确认，不凭模型自称或文风猜。
+   - `MEDIUM → runtime_policy=GLM_ALLOWED`；`HIGH → runtime_policy=NATIVE_ONLY`。当前为 `CODEX_GLM|CLAUDE_GLM` 且 HIGH 时立刻返回 `CUTOVER_NATIVE_REQUIRED`，不得进入 P1/施工。MEDIUM 命中共享 contract 的机械高风险疑似否决器时标 `HIGH_SUSPECTED` 并停在用户重新分类/切原生门。
+   - 风险 envelope 逐字落 `team-progress.md`，随后写入 frozen contract；缺用户分类返回 `WAIT_USER_RISK_CLASSIFICATION`。共享口径唯一指针：`D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo/.agents/mc-expert-common/review-contract-v2.md`。
+1. **P1 · 控读自答**：先定点 Grep/Read 自答可查事实；预计跨目录或 >10 文件才派一次性 Explore。把已核事实与证据指针落盘后标 `P1✓`，断线不得白跑重查。
+2. **P2 · 单轮收口**：用 Skill 工具直接调规范名 `chop-task`（不走 `/chop` command 壳）：`caller=team-task mode=contract-only run_id=<run_id> source_block_id=<id> source=team-task.md output=team-task.md profile=auto input_policy=<initial|answered|continue-defaults>`。chop 必须走完整 kickoff gate；决策类用 AskUserQuestion，重事实缺口按 `funnel-gate.md` 生成 `team-progress/questionnaire-<run_id>.md`。没有墙钟超时：只有用户填答后重入，或显式 `/team-task continue-defaults`，才继续。
+   - 用户独有事实、scope/done_when/权限/外部真相身份不得默认；只允许明确标为 PREFERENCE 且带安全默认的未答项降级。降级记「漏斗默认·待确认」，**P5 前不得冒记 `自主裁决(B)`**。仍有阻断事实则停在 P2。
+3. **P3 · 冻结合同**：chop 以 `run_id+source_block_id` 幂等追加带 `contract_id/status=frozen` 的合同块（不覆盖零散 prompt、不打 chop consumed）；多依赖检查点/多执行体实质交接/跨会话任一命中才完整集，否则最小集。更新 `contract_id`、标 `P2✓ P3✓(最小集|完整集)`；同键已有 frozen 块只复用原指针。
+4. **P4 · 二轴路由**：按 `funnel-gate.md` 分开计算 `coordination_score`（选 T1/T2/T3）与 `assurance_profile=BASE|ENHANCED`（只调复核强度）。记录 `recommended_topology`；用户面四项为 T1/T2/T3/T4-AUTO，T4 只表示 `routing_mode=AUTO（当前建议实现为 Tn）`，不是第四种实际拓扑。
+5. **P5 · 一次授权门**：合同未 frozen 或有 OPEN_BLOCKERS 时 B 禁选，只开 A/停问。A 模式把拓扑/A-B 合并为一次确认；B 模式选定即构成对本 run 的建队/自走授权。记录 `routing_mode / recommended_topology / realized_topology / assurance_profile / drive_mode` 后标 P4/P5；P5 前所有默认仍是「漏斗默认」，不倒灌 B。
+6. **P6 · 执行、增强终审与收尾**：T1=常驻 planner+coder+mxp；T2=常驻 coder+mxp，命中负例/四态取证门时强制一次性 planner；T3=lead 直做+每个关键门一次性 reviewer；T4 按 `realized_topology` 执行并同时留推荐/实际值。关键终签、迁移、权限/发布、schema/API 冻结的独立复核不可跳、不可静默自审降级。
+   - `assurance_profile=ENHANCED`（GLM 合法 MEDIUM 必然命中）时，最终 artifact 冻结并计算 SHA-256 后，必须启动一个 **fresh、一次性、只读** mc-expert，按共享 `review-contract-v2.md` 交齐 `REVIEW_PROFILE=ENHANCED_FINAL / AUTHOR_RUNTIME / 风险 envelope / ARTIFACT_MANIFEST / REQUIREMENTS / LIVE_BASELINE / VERIFICATION_EVIDENCE / UNVERIFIED_SCOPE`。不得复用常驻 mxp 的旧上下文，不喂 coder/lead/planner 的 PASS 预判或上一 reviewer verdict。
+   - 只有 `VERDICT=GO + HASH_VALIDITY=VALID + UNVERIFIED_SCOPE=NONE + 八个承重检查全过` 才可终签；`GO_WITH_CHANGES` 修后必须以新 hash fresh 重审。`CUTOVER_NATIVE_REQUIRED / CROSS_STACK_REQUIRED / BLOCKED_EVIDENCE / reviewer 不可用` 一律转 `WAIT_HUMAN|BLOCKED`，不得降级为自审。
+   - 完成/等待人工/熔断时写 `run_status=COMPLETE|WAIT_HUMAN|HALTED`，再走既有收尾 loop。
+
+**A/B 衔接唯一口径**：B 模式下路由选择=本 run 已授权的自主裁决（推荐非 team 自走、推荐 team 可自建，留痕）；A 模式下 P4/P5 合并为一次用户确认。Agent Teams 官方仍要求用户批准；P5 的明确选择就是该 run 的批准，不把 B 扩成跨 run 常驻授权。
 
 ## 建队执行（通用要求 · 本 skill 权威）
 
 - 前提：本 repo 已开 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`。若用自然语言建队后没 spawn 出 teammate，提示用户确认开关已开 + CC ≥ v2.1.32（`claude --version`）。
-- 用自然语言建一个 team：planner（只读规划）/ mc-expert（带 KB 挑战，只读顾问）/ coder（含 Edit/Write）。关键背景写进 spawn prompt（teammate 不继承 lead 对话历史）。
-- **放权深度**：A/B 驱动模式的完整流程（选项文案 + 四铁律 + 两条恒定不变量）**写死在本 skill（见下「B 模式（深度放权）完整流程」节）= 权威单一版本**，不依赖各 repo team-task.md 是否写到——这是「无弹窗」与「不被偷偷替你拍板」之间的安全阀，不能靠每个 repo 各自补。只有**真·repo 专属落地**（落点路径等）才留给该 repo team-task.md。
-- **team-progress.md**：lead 当唯一写手，teammate 经 mailbox 汇报、lead 汇总落根目录 `team-progress.md`；只读角色不自己写文件。每完成一步更新（做了什么 / 现状 / 下一步 / 卡点）。断线续命：建队前归档已把上一轮存进 `team-progress/`，要续接先读那份最新归档——续的是工作内容/进度，**活 team 状态续不回**（teammate 要重 spawn）。
+- 按 `realized_topology` 建队：T1 常驻 planner（规划+取证）/ mc-expert（KB 挑战）/ coder（实现）；T2 常驻 mc-expert/coder，需负例或四态取证时临时派 planner；T3 不建常驻 team。关键背景写进 spawn prompt（teammate 不继承 lead 对话历史）；mc-expert 的过程咨询短锚必须交齐共享 `review-contract-v2.md` 的 v2 六字段并写 `REVIEW_PROFILE=HISTORY`。
+- **放权深度**：A/B 驱动模式的完整流程（选项文案 + 四铁律 + 三条恒定不变量）**写死在本 skill（见下「B 模式（深度放权）完整流程」节）= 权威单一版本**，不依赖各 repo team-task.md 是否写到——这是「无弹窗」与「不被偷偷替你拍板」之间的安全阀，不能靠每个 repo 各自补。只有**真·repo 专属落地**（落点路径等）才留给该 repo team-task.md。
+- **team-progress.md**：lead 当唯一写手，teammate 经 mailbox 汇报、lead 汇总落根目录 `team-progress.md`；只读角色不自己写文件。每完成一步更新（做了什么 / 现状 / 下一步 / 卡点）。骨架的三累积区为 `自主裁决(B)` / `OPEN_BLOCKERS` / `PENDING_HUMAN_NONBLOCKING`，另有「漏斗默认·待确认」与复盘位；spawn 只带快照指针。断线按 P0 的 run 三元组续工作内容，**活 team 状态续不回**（teammate 要重 spawn）。
 - **长正文回传 / 里程碑汇报（含只读角色）**——建队 spawn prompt 里对每个 teammate 写明下列：
   1. **传输层**：teammate 完成后**必须显式 `SendMessage` 发给 lead**——别依赖 idle 通知（只带一行摘要、不带正文）。〔2026-06-17 实测：显式 `SendMessage` 单条 ~46KB 全量逐字到达——通道与容量没问题。〕
   2. **承重层（2026-06-18 修订旧「不是落盘」口径）**：显式 `SendMessage` **必要不充分**。实证：①投递 flaky——同一 coder 同 session 既有完整正文(1730字)到达、也有连 3 轮只到 idle 零正文(mc-debug07)；②teammate 可能撞 session 限额在汇报前被截断(本次两 coder 实测)。故**有 Write 的角色(coder)：有产物的报告先写盘 + `SendMessage` 发指针，承重靠盘**；只读角色(planner/mc-expert，无 Write、opus)仍发全文（同 session 6.7k/3.5k/5.2k 字均逐字到达，可靠）。
   3. **lead 兜底**：「产物/报告已落盘」节点 lead **默认直接读文件验收**，正文连等 ≤2 轮询拿不到 → 直接自核产物（Bash/zipfile 实扫），别陷进反复 nudge 的递减回报。
   4. **诊断纠偏**：本环境 team = `backendType: in-process`（**非 tmux**）。失败是同 session 投递 flaky + 可能 session 限额截断，**不是** tmux 轮询/通道容量/agent 漏发工具调用——别查 pane、改 tmux、分块正文、或加「记得发工具」这种无效咒语。
-  5. **★选型纠偏（最高杠杆·建队前先判）★**：若是**单点串行流水线**（一个 coder 握全量从 M1 干到 M4、其余角色只前端把关一次），**不建队**——执行体隔 flaky mailbox 汇报是自找失败面。lead 向用户说明「建议 solo + 理由」，得 OK 后**就地 solo 执行**（沿用 step-0 已选 A/B 档，不绕 todays-task、不重敲命令、不丢授权）。**陪审不省（深度授权的安全阀）**：solo 省的是常驻 team 的冷启动/编排成本、**不是省 mc-expert 陪审**——前端 plan 审/素材门、**每个关键验收门交用户之前**、以及 mode-B 自主裁决点，仍派**一次性 `@agent`（mc-expert/planner）带验收背景把关、用完即释**（[[feedback_keygate_mc_expert_jury]]：逐门审非只审一次；其「不存在/悬空」类否定结论因工具只见本 repo 须实测再采，正面建议照收）。执行段 lead 自己写代码/COM 自检。这样 idle-零正文从源头不发生（[[feedback_solo_vs_cold_team]]）。并提示用户：此类 task-shape 下次在 chop-task 前端就该进 todays-task / 单干 lane。team 留给真并行/真多专长协作。
+  5. **★T3 选型纠偏（最高杠杆）★**：若是**单点串行流水线**（一个执行体握全量从 M1 干到 M4、其余角色只前端把关一次），推荐 T3——执行体隔 flaky mailbox 汇报是自找失败面。P5 已确认 T3 后就地 solo 执行（不绕 todays-task、不重敲命令、不丢授权）。**陪审不省**：前端 plan/素材门、每个关键验收门交用户前、mode-B 自主裁决点仍派一次性 `@agent`（mc-expert/planner）带三件套把关。team 留给真并行/真多专长协作。
   〔机制实证版单一权威诊断见 KB `Mc-Expert-repo/references/agent-teams.md`「idle-零正文：故障模型 + 兜底策略」节〕
+
+### spawn 短锚与里程碑五件套（防漂移承重件）
+
+- **spawn prompt = 短锚（≈10 行）+ 指针，不塞任务全文**：①角色定位一句 ②任务终态一句 + 当前检查点 ③`team-task.md`（及判据文件）路径指针 ④**第一动作 = 完整读 team-task.md**（teammate 不继承 lead 历史，spawn prompt 即宪法；每次读 live 文件，天然防任务文本漂移）⑤汇报纪律一行（见下分档）⑥B 模式红线一行（权限类命令不在中途发起、攒待人工）。三清单等台账状态只给 team-progress 快照指针，不复制内容。
+- **主动纠偏三问**（teammate 接新活 / 新检查点 / 关键交接 / 声称完成前必答，随短锚以一行引用）：①当前动作明确服务哪个检查点、哪个未满足的 done_when？映射不上立即停下重锚主线；②是否把「明确不做」或范围外优化偷偷变成必做？③正要声称「已完成」的内容，实际实现、文档、可复验证据三方一致吗？
+- **汇报分档**：日常 mailbox 汇报保持轻量（收尾只报 完成/卡点/下一步，**不变**）；仅**里程碑 / 检查点完成 / 关键交棒**须**五件套**——①当前检查点与 done_when 映射 ②实际改动 ③实际验证与证据路径 ④三条纠偏自问结论（含是否复用已审模式）⑤三清单（自主裁决(B) / OPEN_BLOCKERS / PENDING_HUMAN_NONBLOCKING）当前状态。
+- **失败交接带稳定 `failure_key`**（`stage|error_family|error_code|unmet_done_when`，禁 PID/时间戳/随机文案——保证同源失败可机械累计「连续 2 次」熔断）；语义详见 double protocol §自主轴 7（`Mc-Expert-repo/.agents/double-session-common/protocol.md`）。
+
+### 关键验收门（每门独立 reviewer；验收背景 = 三件套）
+
+- 每个关键验收门交用户前安排独立 reviewer：T1/T2 可用已在队内且未执行该产物的 reviewer，T2 负例门与 T3 用一次性 `@agent`（mc-expert/planner）。**三件套 = 判据字面原文 + 原始证据（产物路径/实际输出/行号）+ 待判问题**；**禁喂已采信结论**——不给 coder 自报 PASS、不给 lead 倾向性表述；用户拍板的边界约束可给（那是约束不是结论）。
+- **分轨**：T1=常驻 planner 取证，风险扳机才叠 mc-expert；T2=普通门由 mxp 独立复核，命中负例/四态取证强制一次性 planner；T3=lead 自跑证据+一次性 reviewer。planner 已在场不为同一证据面机械叠第二 reviewer；独立 reviewer 不可用则 `PENDING_INDEPENDENT_REVIEW/WAIT_HUMAN/BLOCKED`，不得自审冒充。
+- **终审例外**：上条只管过程门。`assurance_profile=ENHANCED` 的最终终签始终另起 fresh `mc-expert`，执行共享 `review-contract-v2.md` 的 `ENHANCED_FINAL`；常驻 mxp 的 HISTORY/过程结论不能抵扣终审。
+
 - **效率/通信**：能匹配已有 role/skill 就直接走、别从零规划；需盘点多文件派 Explore subagent、别自己串行翻；不复述 team-task.md、直接动手；收尾只报 完成 / 卡点 / 下一步。
 - 收尾让 **lead** 跑 `Clean up the team`（先 shutdown 所有 teammate）。
+
+### 验收签注四态（done_when 逐条；一手 > 二手）
+
+- **标尺**：拎 done_when 字面原文逐条映射到实际行为/产物——不取 coder 自述/验收报告/docstring 二手结论；验收报告或陪审结论与独立复跑冲突 → **信独立复跑**，差异逐条列给用户、不擅自调和。「学习型 repo 宽严」不是漏判挡箭牌：宽严只影响要不要现在修，不影响达没达标。
+- **四态**：`PASS_DYNAMIC` 本 run 独立复跑看到对 / `STATIC_ONLY` 仅静态推断未跑负例（= reflexes 2026-08-05「仅静态推断、待动态复跑」态）/ `FAIL` 真跑看到错 / `BLOCKED` 想跑跑不了·环境阻断（非 FAIL 非 PASS，落「待动态复跑或交用户」）。
+- **STATIC_ONLY 三锁**：①禁写成「达标/完成」；②强制浮到最终交付物待确认项（挂恒定不变量 1）；③准入仅限不存在有意义的动态验证、或当前环境客观不可用/不安全/超出授权——必须记录原因、所缺条件、可用时的复跑命令/步骤，**方便/成本高不构成理由**（签它比跑负例便宜 ≠ 准签）。
+- **负例执行体**：T1 常驻 planner；T2 一次性 planner；T3 lead 在系统临时目录隔离副本真跑后交一次性 reviewer 独立判证据。判据含「可靠失败/缺 Y 中止」必须看到真失败。边界：①不动工作树正本/交付产物；②取证≠编排，gate 拍板留 lead；③coder 自检可用，但不得成为关键终签唯一证据。
 
 ## 不要做
 
 - 不复述 team-task.md 全文，直接说"开始执行 X"后动手。
 - 不让 teammate 碰编排权 / 替用户做「推翻已封决策」级判断。
-- 不跳过第 0 步的 A/B 选择（选 A 时还需逐决策点等用户拍板；**选 B「深度放权」时：teammate 报低置信/无先例，lead 不转交用户，当场按「默认>成功率最高>最易回滚」自走 + 记进 team-progress 的「自主裁决(B)」区，仅 4 条红线上报——销毁性删除 / 对外交付·Ldterm 明文 / 连失 2 次 / 推翻已封决策（上报=后置人工门 + 落盘上报，**非中途阻塞框**，见下节）；详见下「B 模式（深度放权）完整流程」节**）。
+- 不跳过 P5 的 A/B+路由授权（A 逐决策点等用户；B 按默认>成功率>易回滚自走并留痕，仅 4 红线上报）。不把 `continue-defaults` 偷换成 B 授权。
 
 ## B 模式（深度放权）完整流程（最新确认版 · 本 skill 为权威，team-task.md 不再各存一份）
 
 > 2026-06-18 用户确认：A/B 驱动流程的**权威单一版本**在此，各 repo team-task.md 只留「本次任务 + repo 专属落点」，不再复制本节（曾因各存副本而漂移到不同版本）。
 
-**第 0 步 AskUserQuestion 的 A/B 选项文案**（lead 直接喂给 AskUserQuestion，无需各 repo team-task.md 重写）：
+**P5 AskUserQuestion 的 A/B 选项文案**（与 T1/T2/T3/T4-AUTO 菜单同一授权门呈现）：
 - **A · 人工驱动**：lead 每个决策点都停下问用户；派活 / 批 plan / 汇总都等用户确认，lead 只做机械执行。（前期测试期推荐）
 - **B · 深度放权（真授权）**：**不确定也先跑**——planner/mc-expert/coder 报「低置信 / 无先例 / 拿不定主意」时，lead 不转交用户，当场按「**默认项 > 历史成功率最高项 > 最易回滚项**」拍一个并继续，逐条记进 team-progress 供事后批量复盘。**仅 4 条红线才上报**，平时用户不插手。（学习型 repo 的快速试错档：宁可先跑出可审结果再快速纠偏，不在每个小分叉上堵用户。）
 
@@ -57,10 +91,11 @@ description: 用 Agent Team 执行任务的入口（类似 /today）。读取当
 
 **两模式都不变的硬线**：teammate **不碰编排权**、不替用户做「推翻已封决策」级判断；CLAUDE.md 的删除 / Ldterm / COM 硬规则两模式下都**不被放权覆盖**。
 
-### 两条恒定不变量（跨所有 repo 的安全阀，换执行者 / 换任务都不许漏）
+### 三条恒定不变量（跨所有 repo 的安全阀，换执行者 / 换任务都不许漏）
 
 1. **自主裁决必须「浮」到交付物，不能只埋进 team-progress。** B 模式 lead 替用户拍的判断点（D1/D3 类、口径取舍、低置信选型……），除记进 team-progress 的「自主裁决(B)」区外，**必须在最终交付物汇报里显眼列为待确认项**，供用户验收时一句话能翻。team-progress 是内部文件、用户不看——只埋进去 = 偷偷替用户拍了板。这是「无弹窗」与「不被偷偷拍板」之间的安全阀，不能靠运气（同反射「交付必显式列 pending 项」）。
 2. **B 只压「循环内决策门」，不压「用户显式定义的交付/验收门」。** 两类门要分清：①循环内决策点（plan 审批、低置信选型）——B 压掉、自走；②用户显式定义的交付/验收门（如素材审核门、成品人工验收）——**B 不压，照常产出给用户**。换个门结构时，别因为选了 B 就把用户想要的门跳过、也别把用户的验收门误当循环决策吞掉。
+3. **验收只认一手证据，STATIC_ONLY 不得报完成。** done_when 逐条按「验收签注四态」签注；没独立复跑过的判据最多 STATIC_ONLY，交付汇报里显式列为待确认项——不许写「已完成/达标」。
 
 > 机制细节、为什么这样设计：见 KB `Mc-Expert-repo/references/agent-teams.md`「新手 FAQ」+ `Mc-emoji/[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`。
 
@@ -82,7 +117,7 @@ team 清理完（lead 跑完 `Clean up the team`）、本次任务**正常收尾
    - **B 模式（深度放权）**：lead **不转交用户**，按铁律 1「默认 > 成功率最高 > 最易回滚」自己判 mc-update / session-new 要不要跑，逐条记进 team-progress 的 `## 自主裁决(B)` 区 + 浮到交付汇报的待确认项（恒定不变量 1）。**熔断场景仍按上面"触发边界"处理**——不让 B 模式给 mc-update 续命。
 
 **★ pin 段（居中 · feature-05 补漏层 · lead 执行）**——**判据单一指针见 KB `Mc-Expert-repo/references/收尾loop判据.md`**（PIN/DROP 判据、方案 a 去重、掉线降级、陪审 spawn 五要素都在那；本 skill 只写控制流、不抄判据，改判据只改那一处）：
-1. **预判闸（必带）**：一句话判"本次有无词表漏网的纠正迹象"——**无迹象直接跳 pin 段、不派 mc-expert**（省陪审成本）。有迹象才往下。
+1. **预判闸（必带）**：一句话判"本次有无词表漏网的纠正迹象"——**无迹象直接跳 pin 段、不派 mc-expert**（省陪审成本）。有迹象才往下。team 运行期 **STATIC_ONLY 未复跑数量 / 自主裁决(B) 分布**是预判输入之一（漏网纠正迹象的高发区）。
 2. 有迹象 → 回顾本次任务列纠正候选（**认不出不硬造**，pin.md 铁律）。
 3. **去重（方案 a）**：Grep/Read 本会话 `live-candidates.<session>.jsonl`，capture_hook 已抓的剔除。
 4. **派 mc-expert 陪审**：team 已 shutdown，**临时 `@agent`(mc-expert) 一次性**（用完即释，呼应建队执行「陪审不省」）；候选 ≥2 条一次 spawn 全给、逐条判，单条才单发。spawn prompt 五要素 + 红线"只给 PIN/DROP+依据、不复述纠正、不顺势修错、**不附概率分**"见判据指针 §5。
@@ -99,3 +134,23 @@ team 清理完（lead 跑完 `Clean up the team`）、本次任务**正常收尾
 **B 模式下 session-new 的边界**：lead 判"跑 session-new" = 走固化交接流程（产 plan + 更新状态文件 + team-progress 归档指针），**不是强制清空/重开 session**——真正关 session、重开仍由用户操作，lead 不替用户决定何时真关。
 
 **session-new 段幂等（防 loop 重入产重复 plan）**：session-new 重入前查本会话 plan 是否已存在（同名/同任务），存在则跳过、不堆重复/空 plan。
+
+---
+
+## 附录：team-task.md 模板（单一真源）
+
+**流程权威声明**：本 skill 是 team 编排流程（A/B 驱动、关键验收门、四态签注、收尾 loop）的单一真源；repo 侧 team-task.md 中旧的通用模板 / 通用编排流程副本如与本 skill 冲突，以本 skill 为准——repo 专属任务、路径、硬约束和用户明确验收标准继续有效。完整集②内嵌的**任务内容冲突优先级**（用户最新明确指令 > repo 硬规则/已封决策 > 本次冻结任务 > 检查点计划 > 历史说明）是任务内容的优先级，别与「skill = 流程单一真源」混写。
+
+**最小集（默认档，全文照抄）**：
+
+> **# 任务：<一句话标题>**
+> **## 本次任务**
+> - 终态一句话：<做完后的结果状态；禁「重构/实现/优化」动作词>
+> - 本轮做 / 明确不做：<1-3 句> / <排除项逐条，与做什么同等重要>
+> - 允许写 / 只读 / 禁止：<路径/动作>
+> - 红线：<四红线 + 本项目禁止动作>
+>
+> **## done_when（字面可判；至少 1 条可外部取证）**
+> - [ ] D1: <结果属性>（验证：<命令/文件/查询及预期>）
+
+**完整集 7 块骨架**（仅块名 + 每块 1 行要点，照 KO 防漂移指南 §4/§6 投影、不整段复制）：①任务终态（结果状态非动作词）②权威源·主线·范围（repo 绝对路径 + 冷启动必读 + 冲突优先级一行 + 本轮做/明确不做 + 允许/只读/禁止三态路径 + 保留无关工作树改动）③全局 done_when（每条结果属性+验证方式；单检查点通过 ≠ 全局完成）④检查点路线（depends_on / scope / local_done_when / evidence / novelty / expert_review；当前入口明确）⑤红线·禁止·人工门（四红线 + 项目禁止 + 已前置授权 vs 后置 PENDING_HUMAN_NONBLOCKING + 阻断 done_when 的事项不得后置伪装完成）⑥纠偏三问与陪审扳机（指针到 skill 正文，不复制）⑦交接口径（指针到「里程碑五件套」，不复制）。
