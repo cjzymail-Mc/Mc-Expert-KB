@@ -16,6 +16,11 @@ description: 接下来这个任务走 mc-expert 陪审 + 深度授权(B)，完�
 - 4 条红线仍 halt，但走「**不执行该命令 + 落盘报告 + halt 上报**」，**不靠阻塞式权限框**。后置的是决策权，不是后置着自己偷偷补做。
 - 依据：KB `decisions/autopilot-defer-perm-to-human-gate`（源 2026-06-20 8h 死锁事故）。
 
+【接续既有 team-task run（跨入口状态拉平）】
+- 若根 `team-progress.md` 命中既有 team-task 三元组且 `run_status=WAIT_HUMAN`，用户明确要求续做同一任务且合同语义不变时，任何可变动作前先在 progress 记 `RESUME_AUTHORIZED`（`entry=/free`、日期、用户指令摘要），并把状态改回 `ACTIVE`；不得一边保持 WAIT_HUMAN 一边施工。
+- 若续作改变冻结合同的 scope、done_when、允许写/只读/禁止或红线，必须保持 `WAIT_HUMAN`，先按 `team-task/funnel-gate.md` 追加并校验 addendum、核对基础 `contract_id` 且更新 `effective_contract_id`，最后同笔记录 `RESUME_AUTHORIZED` 并切 `ACTIVE`；固定顺序为 `CONTRACT_CHANGE_RESUME_ORDER=WAIT_HUMAN→ADDENDUM_VALIDATED→RESUME_AUTHORIZED→ACTIVE`。若实为新任务，归档旧 run 后从 `/team-task` 初始化，不把新活混入旧 progress。
+- 接续段沿原 team-task 的验收与收尾规则，本 `/free` 收尾 loop 不重复触发。
+
 【收尾 · 微型 loop：mc-update → pin → session-new（完成阶段目标·请求用户介入时）】
 
 完成阶段目标（含任务收尾）、准备请求用户审核介入时，按 **mc-update → pin → session-new** 顺序跑一遍收尾固化，省掉用户手敲 `/mc-update`、`/pin`、`/session-new`。机制同 `/today`、`/team-task` 的收尾微型 loop（先预判、再决策、选"是"后 Skill 自动调用；mc-update→pin→session-new 顺序；两层判断边界——只判"要不要启动"、启动后写不写归 mc-update/pin_capture/session-new 自己；失败/未完成跳 mc-update 和 pin、留 session-new），下面只写 /free 的差异与边界：
