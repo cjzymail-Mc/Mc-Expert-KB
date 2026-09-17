@@ -79,6 +79,8 @@ if font_hit and not fill_hit:
 
 ## 加密态无差别（COM 透明读色，实测确认）
 
+> **前提注记（2026-09-11）**：本节加密态实测源自生产机（带 Ldterm）。当前开发机无加密，但**读色仍必须走 COM**——openpyxl 不解析 RGB 是库缺陷、与加密无关——故本节结论在本机同样成立，只是"加密/明文一视同仁"里的加密分支当前休眠。
+
 本机 Ldterm 对 win32com 启动的白名单 `EXCEL.EXE` 透明解密（白名单进程）。`加密test.xlsx` 首字节 `88 7D 1C`（密文），但 COM `DispatchEx` 打开仅 **1.2s**，`Interior.Color` / `Font.Color` 全部读出**精确 RGB**（含 `#7030A0`、`#00B0F0` 这类非调色板标准色），与明文态零差异。
 
 **所以：染色契约统一走 COM，加密/明文一视同仁，不需要为加密态做任何特殊处理。**（碰文件仍按 CLAUDE.md 硬规则先读 8 字节：`88 7D 1C` → 走 COM；`50 4B` → 明文也走 COM 读色，别图快用 openpyxl——openpyxl 读色返回 theme/indexed 原始态、不解析成 RGB，会漏判。**读色这一项不吃"解密提速"那条捷径。**）

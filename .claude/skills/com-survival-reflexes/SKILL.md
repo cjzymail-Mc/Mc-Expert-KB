@@ -7,6 +7,8 @@ description: Windows COM 操作 Office（Word / Excel / PowerPoint）时的生�
 
 Office COM 自动化的"避雷手册"。Word / Excel / PowerPoint 的 COM 接口是不可靠的——版本差、license 状态、并发文件锁、Ldterm / DLP 的拦截、随机抽风的「没响应」……每一种都能让脚本无声挂死或炸出诡异异常。这个 skill 把跨项目反复踩到的坑沉淀成 7 条反射动作。
 
+> **前提注记（2026-09-11）**：当前开发机=实验环境**无加密**，Ldterm 相关反射（加密拦截/白名单读密文）当前休眠；超时/finally 兜底/CUTOVER/僵尸清扫等其余反射与加密无关，**照常全量生效**。生产机（带加密）上全部反射自动恢复现役。另：无加密环境下 COM 保存不再反向加密——真实 Excel COM 重算（open→强制重算→save）可作为公式 ground-truth 路径复用本手册纪律。
+
 ## 何时使用（命中任一就跑）
 
 - **写新脚本前**：开工前对照 7 条反射清单走一遍，避免重新踩坑
