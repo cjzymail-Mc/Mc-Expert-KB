@@ -1,11 +1,11 @@
-# codex-failcount.ps1 — Codex 侧连失2次熔断计数（模拟 Claude autopilot_failcount.ps1，但不硬编码 ~/.claude）
-# $today 全托管模式用：-Mode reset(开跑清零)/fail(失败+1)/status(查)。达 2 → AUTOPILOT_STOP + 退出码 2 → 立即停、交用户、不再试第3次。
+# codex-failcount.ps1 — Codex 侧任务/方案第3次失败熔断计数（模拟 Claude autopilot_failcount.ps1，但不硬编码 ~/.claude）
+# $today 全托管模式用：-Mode reset(开跑清零)/fail(失败+1)/status(查)。达 3 → AUTOPILOT_STOP + 退出码 2 → 立即停、交用户、不再试第4次。
 # 计数文件默认 $env:TEMP\codex-failcount.json（避 ~/.claude + 监控盘；codex sandbox 放行 TEMP）。
 # ⚠️ 若 codex sandbox constrained language mode 拦 pwsh -File（同 runner），$today adapter 降级为自维护 json 计数。
 param(
   [ValidateSet('reset','fail','status')][string]$Mode = 'status',
   [string]$CountFile = "$env:TEMP\codex-failcount.json",
-  [int]$Threshold = 2
+  [int]$Threshold = 3
 )
 $ErrorActionPreference = 'Stop'
 

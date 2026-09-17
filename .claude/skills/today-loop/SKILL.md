@@ -62,7 +62,7 @@ SELECT → PREFLIGHT → BUILD → SELF_CHECK → JURY → CHECKPOINT
 
 > 2026-07-23 加（plan 自主轴）。**today-loop 的核心目标：运行中途全程无弹窗**。任务进 today-loop 前**风险已由用户人工评估**（用户筛过、认定适合深度授权），故运行中本不该有需要中途拦的决策——以下纪律把这根 mode 在 today-loop 层显式贯穿一次。
 
-today-loop 把 mode 钉死 autopilot，所以 today-core §1.1 门3 / §1.2 途中决策 / §2.1 收尾决策 / §2.2 两连败**四面全部走 autopilot 分支**，且这根 mode 贯穿多 plan（每个 plan 内部 + plan 之间都同纪律）。铁律：
+today-loop 把 mode 钉死 autopilot，所以 today-core §1.1 门3 / §1.2 途中决策 / §2.1 收尾决策 / §2.2 第 3 次失败熔断**四面全部走 autopilot 分支**，且这根 mode 贯穿多 plan（每个 plan 内部 + plan 之间都同纪律）。铁律：
 
 - **中途零弹窗**：运行中（kickoff 之后、三终态之前）任何决策点——含**没有用户给定默认的拍板点、口径拿不准、要不要顺手改某处**——都**不弹 AskUserQuestion、不因 contract 的 human_gates 语义门自觉停**。先按共享 `review-contract-v2.md` 用 v2 六字段 envelope 调 `Task(mc-expert)`，固定 `REVIEW_PROFILE=HISTORY`，拿历史建议后**直接照办继续**；HISTORY 不抵扣命中增强触发器后的 fresh `ENHANCED_FINAL` 终审。
 - **置信低/无先例也不升级用户**（today 深度授权语义，区别于 today-core normal 档的"无默认才停"）：mc-expert 给不回高置信，照样采纳它给的默认推荐（默认 > 成功率最高 > 最易回滚）继续，**不回头问用户**。把该裁决记进收尾「自主裁决」清单。
@@ -74,7 +74,7 @@ today-loop 把 mode 钉死 autopilot，所以 today-core §1.1 门3 / §1.2 途�
 - **scope 收窄**（codex 陪审第2点①，不可被"可回滚"绕过）：顺手重构、扩 `allowed_paths`、改验收口径这类**扩大 scope 的动作 → 不执行、记进收尾建议**。需要扩 scope 才能完成的，转 WAIT_HUMAN（scope 扩张本质是"运行中新增权限硬依赖"，是真硬依赖四步中第4步的一种，run-contract 同样要求直接 `WAIT_HUMAN`）。mc-expert 是咨询证据、不是扩授权来源；"可回滚"不替代 contract scope。
 - **唯一允许弹的窗 = kickoff**（§2 step6）。事实层缺口（只有用户知道、inspect 也得不到）一律收进 kickoff 呈 Contract 那一步一并列出、请用户一次性补；**中途不再为事实缺口弹任何窗**——能 inspect 的自己盘、有默认的按默认走，都攒到收尾。
 - **自主 spawn subagent 是期望行为**（coder/mc-expert/Explorer），明确保留。
-- **只有四类停**（与 today-core 一致）：脚本机械门（preflight 越界 / forbidden_action / human_gates 精确命中）、JURY 给 WAIT_HUMAN、四红线、两连败熔断（today-core §2.2 AUTOPILOT_STOP）。
+- **只有四类停**（与 today-core 一致）：脚本机械门（preflight 越界 / forbidden_action / human_gates 精确命中）、JURY 给 WAIT_HUMAN、四红线、同一任务/方案第 3 次失败熔断（today-core §2.2 AUTOPILOT_STOP）。
 - **`human_gates` 双重身份**（plan 升级C1，源实战频停根因）：
   - **脚本层**：preflight 只对 `ProposedAction` 字符串做**精确匹配**（`$s.human_gates -contains $ProposedAction`，today-loop-state.ps1 preflight-check）——只有提交的 action 名等于 human_gates 数组某项才机械转 WAIT_HUMAN（如 `delete`/`push` 这类动作名）。
   - **语义层**（`route-decision`/`batch-after-single-verify`/`scope-expansion` 这类概念）：**不在运行中途停下来问**，而是"这个决策我按最高置信选了 X"，记进收尾自主裁决清单。**语义门 = 留痕标记，不是中途阻塞**——脚本精确匹配不上语义概念（不会机械触发），故读到 contract 列了它，不代表"我在做这类决策就该停"。
@@ -143,7 +143,7 @@ start 后调脚本 `preflight-check`，提交 repo-relative `TargetPath` 与 `Pr
 |---|---|---|
 | `COMPLETE` | 所有 plan `passed`，逐项确认 `terminal_evidence` 是 run dir 内实际存在文件（含 handoff） | 调 `complete`；写通俗汇总 |
 | `WAIT_HUMAN` | 权限越界 / 显式人工门 / 无有效 reviewer verdict / schema 不可自愈 | 调 `wait-human`；写 handoff 说明：发生什么、已完成什么、为什么不能自续、用户下一步只需做什么 |
-| `HALTED` | 两连败 / 四红线 / 不可恢复错误 | 调 `redline`（红线）或 `fail` 第二次；写 handoff |
+| `HALTED` | 同一任务/方案第 3 次失败 / 四红线 / 不可恢复错误 | 调 `redline`（红线）或 `fail` 第三次；写 handoff |
 
 checkpoint 不是 Goal 终态。
 
@@ -151,9 +151,10 @@ checkpoint 不是 Goal 终态。
 
 ## 5. 失败与红线
 
-- 第一次失败 → REWORK（自动返工一次）。
-- 第二次连续失败 → HALTED，**禁止第三次**（脚本在状态机层拒绝）。
-- 四红线（销毁性/对外明文/连失 2 次/推翻 KB 已封决策）命中即 `redline` → HALTED，落盘上报，不计普通失败。
+- 第一次失败 → REWORK；先取证/陪审后再试可行路线。
+- 第二次连续失败 → REWORK；只试尚未使用的次选或陪审补出的新落点。
+- 第三次连续失败 → HALTED，**禁止第四次**（脚本在状态机层拒绝）。
+- 四红线（销毁性/对外明文/同一任务或方案第 3 次失败/推翻 KB 已封决策）命中即 `redline` → HALTED，落盘上报；其中第三类由 `fail` 计数机械触发，其余不计普通失败。
 
 ---
 
@@ -180,7 +181,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\t
 | `pending-review` | PlanId | reviewer 未返回=PENDING |
 | `review-pass` | PlanId, Evidence | 校验 reviewer PASS 文件→checkpoint |
 | `pass` | PlanId, Evidence | plan=passed，回 select |
-| `fail` | PlanId, Reason | 第一次=rework；第二次=halted |
+| `fail` | PlanId, Reason | 第一次/第二次=rework；第三次=halted |
 | `wait-human` | PlanId, Reason | 进 WAIT_HUMAN |
 | `redline` | Reason | 红线→halted，清 current_plan |
 | `complete` | — | 全 plan passed + 终态证据齐全→complete |
@@ -209,7 +210,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\t
 
 **不做**：不改 settings/hook、不自动 push、不对外交付、不操作 Office 图形界面、不改 feature06 封盘文件、不在无人值守中修改正式 memory 或其他 repo。
 
-**四红线**：销毁性/不可逆、对外明文合规、连失 2 次、推翻 KB `decisions/` 已封决策——命中即 halt 落盘。
+**四红线**：销毁性/不可逆、对外明文合规、同一任务/方案第 3 次失败、推翻 KB `decisions/` 已封决策——命中即 halt 落盘。
 
 ---
 

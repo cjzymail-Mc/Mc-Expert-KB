@@ -1,6 +1,6 @@
 ---
 name: today-core
-description: 单 plan 公共执行内核——路由门控、执行、收尾固化、两连败熔断。由 today（单次入口）或 today-loop（完整 loop）调用，不直接响应用户输入、不做 model-driven 自动触发。caller 必须预先通过 args 提供 mode（normal/autopilot），core 自己不问。
+description: 单 plan 公共执行内核——路由门控、执行、收尾固化、同一任务/方案第 3 次失败熔断。由 today（单次入口）或 today-loop（完整 loop）调用，不直接响应用户输入、不做 model-driven 自动触发。caller 必须预先通过 args 提供 mode（normal/autopilot），core 自己不问。
 arguments: [mode, task]
 ---
 
@@ -14,7 +14,7 @@ arguments: [mode, task]
 >
 > **判据单源**：`Mc-Expert-repo/references/today完整版loop判据.md`（完整 loop 的状态机/PASS-REWORK-WAIT_HUMAN 判据；本 core 是其中 BUILD/SELF_CHECK/JURY 的单 plan 执行侧）。
 >
-> **mode 贯穿（★ 全托管"第四面"，抽 core 时最易割裂的坑）**：mode 在本 core 内部有 **4 个消费点**——§1.1 门 3、§1.2 途中决策、**§2.1 收尾段决策+执行**、§2.2 两连败。母本提示框曾只标三面（§1/§2.2/§3.2），漏了 §2.1 收尾段也读 mode。本 core 用同一根 mode 值贯穿全部 4 点，不得把 §2.1 当"与 mode 无关的纯收尾"。
+> **mode 贯穿（★ 全托管“第四面”，抽 core 时最易割裂的坑）**：mode 在本 core 内部有 **4 个消费点**——§1.1 门 3、§1.2 途中决策、**§2.1 收尾段决策+执行**、§2.2 三次失败熔断。母本提示框曾只标三面（§1/§2.2/§3.2），漏了 §2.1 收尾段也读 mode。本 core 用同一根 mode 值贯穿全部 4 点，不得把 §2.1 当“与 mode 无关的纯收尾”。
 
 ---
 
@@ -35,7 +35,7 @@ caller 调本 core 时，core 先校验从 args 收到的入参：
 
 ## §1 执行调度（原 today §2.1 强制门控，读 mode 分叉）
 
-> **全托管横跨本 core §1/§2/§3 四处**——门控分叉、途中延伸、收尾决策、两连败熔断——是同一根 mode 变量的四面（第四面在 §3 收尾）。改任一处须同步另三处，避免 mode 语义割裂。
+> **全托管横跨本 core §1/§2/§3 四处**——门控分叉、途中延伸、收尾决策、三次失败熔断——是同一根 mode 变量的四面（第四面在 §3 收尾）。改任一处须同步另三处，避免 mode 语义割裂。
 
 ### §1.1 强制门控（读完 task 后,先做路由判断,再动手）
 
@@ -45,9 +45,9 @@ caller 调本 core 时，core 先校验从 args 收到的入参：
 2. 【team task 门】任务是否是「多步实现类、需要 plan→挑刺→实现→复审」的活,或要改多文件/有架构取舍、值得 planner/mc-expert/coder 小队?
    - 是 → **停下,不要自己建队、也不要自己直接开干**;向用户说明「此任务复杂度够 team,建议走 /team-task」+ 一句理由,等用户确认后再动。**mode=autopilot 也不例外**:升级到 team 是难度判断、始终留给用户;caller_id=today-loop 交的 contract 即便 mode=autopilot、也不要自动闯过 team 门、不替用户决定转不转 team。
    - 否(轻量任务,单点改动/查询) → 进入下一步,自己干
-3. 【mc-expert 咨询门 · 中等档(team 与单干之间)】没够 team 门、本可自己干,但**你拿不准 / 犹豫不决**,或命中 mc-expert 任一触发条件——**重大技术选型 / 改核心文件(CLAUDE.md、本 repo 的 plan*.md / agent 定义 / 若是 KB repo 则含 principles·reflexes·repo-map·decisions·references)/ 同一问题已连续失败 2 次**——则**别完全单干**:先 `Task(subagent_type=mc-expert)`，按共享 `review-contract-v2.md` 交齐 `REVIEW_PROFILE=HISTORY / AUTHOR_RUNTIME / REVIEW_TARGET / PROJECT_MEMORY / SEALED_DECISION_QUERY / REVIEW_QUESTION`，拿到历史建议再动手。HISTORY 只做开工/中途咨询，不冒充最终终审。
+3. 【mc-expert 咨询门 · 中等档(team 与单干之间)】没够 team 门、本可自己干,但**你拿不准 / 犹豫不决**,或命中 mc-expert 任一触发条件——**重大技术选型 / 改核心文件(CLAUDE.md、本 repo 的 plan*.md / agent 定义 / 若是 KB repo 则含 principles·reflexes·repo-map·decisions·references)/ 首次实质失败后准备下一次尝试**——则**别完全单干**:先 `Task(subagent_type=mc-expert)`，按共享 `review-contract-v2.md` 交齐 `REVIEW_PROFILE=HISTORY / AUTHOR_RUNTIME / REVIEW_TARGET / PROJECT_MEMORY / SEALED_DECISION_QUERY / REVIEW_QUESTION`，拿到历史建议再动手。HISTORY 只做开工/中途咨询，不冒充最终终审。
    - **mode=normal(普通档)**:mc-expert 置信度低时按其建议升级给用户;真正琐碎、无疑义的改动才直接自己干。
-   - **mode=autopilot(全托管档)**:拿到裁决后**直接照办、继续往下,不回头问用户**。**置信低/无先例不再升级**——采纳 mc-expert 的默认推荐(默认>成功率最高>最易回滚)继续,记进收尾「自主裁决」清单。只有 4 红线才停(见 §3.2:销毁性删除 / 对外交付·Ldterm 明文 / 连失 2 次 / 推翻已封决策)。**连失 2 次熔断优先**:计数到 2 一律转人工审,不再让 mc-expert 续命(见 §3.2)。
+   - **mode=autopilot(全托管档)**:拿到裁决后**直接照办、继续往下,不回头问用户**。**置信低/无先例不再升级**——采纳 mc-expert 的默认推荐(默认>成功率最高>最易回滚)继续,记进收尾「自主裁决」清单。只有 4 红线才停(见 §3.2:销毁性删除 / 对外交付·Ldterm 明文 / 同一任务或方案第 3 次失败 / 推翻已封决策)。**第 3 次失败熔断优先**:同一稳定 failure key 计数到 3 一律转人工审,不再让 mc-expert 续命(见 §3.2)。
    - 注:本门是开工/收尾前的**自觉前门**;若本 repo 装了 mc-expert Stop-hook,收尾时还有 harness 兜底,两者互补——不要因为有 hook 就在该犹豫时跳过咨询。
 4. 任务是否需要盘点多个相关文件(skills/agents/templates/pipeline 等)才能动手?
    - 是 → 派 1 个 Explorer subagent 一次性平行盘清楚,不要自己串行 Glob+Read
@@ -59,7 +59,7 @@ caller 调本 core 时，core 先校验从 args 收到的入参：
 
 - 场景:任务在门 2/门 3 判为轻量、已走"自己干",执行途中却临时冒出一个本来要停下问你的决策点(A 还是 B / 要不要顺手改某处 / 口径拿不准)。门 3 是开工前的前门,接不住这种途中才浮现的;本条专补这段。
 - **mode=normal(普通档)**:照常停下问你,行为不变。
-- **mode=autopilot(全托管档)**:**别停下问用户**——先按门 3 的 v2 六字段 envelope 调 `Task(subagent_type=mc-expert)`，固定 `REVIEW_PROFILE=HISTORY`，拿历史建议后直接照办、继续往下。**置信低/无先例同样不升级**,采纳其默认推荐继续 + 记进收尾「自主裁决」清单;只有 4 红线才停,连失 2 次熔断优先,转人工审(见 §3.2)。若最终产物命中共享 contract 的原生高影响/GLM 中风险终审门，必须另起 fresh `ENHANCED_FINAL`，不能拿本次 HISTORY 抵扣。
+- **mode=autopilot(全托管档)**:**别停下问用户**——先按门 3 的 v2 六字段 envelope 调 `Task(subagent_type=mc-expert)`，固定 `REVIEW_PROFILE=HISTORY`，拿历史建议后直接照办、继续往下。**置信低/无先例同样不升级**,采纳其默认推荐继续 + 记进收尾「自主裁决」清单;只有 4 红线才停,同一任务/方案第 3 次失败熔断优先,转人工审(见 §3.2)。若最终产物命中共享 contract 的原生高影响/GLM 中风险终审门，必须另起 fresh `ENHANCED_FINAL`，不能拿本次 HISTORY 抵扣。
 - 边界:只接管"本可自己拍的小决策"。若该决策点意味着任务其实升格到 team(改多文件 / 架构取舍),回门 2——升级到 team 始终留给用户,autopilot 不闯。
 
 ### §1.3 效率规则
@@ -130,7 +130,7 @@ task **正常收尾**后(完成、或带卡点上报但未熔断),不要就此�
 
 **session-new 段幂等(防 loop 重入产重复 plan)**:session-new 重入前查本会话 plan 是否已存在(同名/同任务)——存在则**只跑第 0 步主线回顾 + 状态更新、不重复产 plan**(不再整个跳过,否则主线回顾也漏)。
 
-### §2.2 全托管安全阀 · 连续失败 2 次 → 转人工审(仅 mode=autopilot 时生效;触发于 §1 每步判定后)
+### §2.2 全托管安全阀 · 同一任务/方案第 3 次连续失败 → 转人工审(仅 mode=autopilot 时生效;触发于 §1 每步判定后)
 
 > mode 四面之四(之一见 §1.1、之二见 §1.2、之三见 §2.1 收尾)。
 
@@ -138,6 +138,6 @@ task **正常收尾**后(完成、或带卡点上报但未熔断),不要就此�
 - 脚本:`pwsh -File "$env:USERPROFILE\.claude\commands\autopilot_failcount.ps1" -Mode <reset|fail|status>`(经 junction 解析到 KB repo,换机/换账号都通)。
 - autopilot 开跑**先 `-Mode reset` 清零**。
 - 每个任务步骤判定后:这步**确实失败**→跑 `-Mode fail`;**确实成功**→跑 `-Mode reset`(连续失败,成功即断 streak)。成/败是你的语义判断,不是每个微动作都记。
-- 脚本累计达 2 时输出 `AUTOPILOT_STOP`(带 🛑)并退出码 2:**见到 `AUTOPILOT_STOP` 或退出码 2,立即停止本次执行,把现状 + 卡点交用户,不得再试第 3 次**——要不要继续不由你判断。
+- 同一稳定 failure key 的第 1/2 次失败仍留在自主流程：先补证据、问 mc-expert、尝试尚未使用的可回滚路线；换建议、agent 或 session 不重置计数。脚本累计达 3 时输出 `AUTOPILOT_STOP`(带 🛑)并退出码 2:**见到 `AUTOPILOT_STOP` 或退出码 2,立即停止本次执行,把现状 + 卡点交用户,不得再试第 4 次**——要不要继续不由你判断。
 - 兜底层不变:delete-guard hook + 权限方案 A 仍在 agent 层之下拦危险动作,autopilot 不放宽。
 - **caller_id=today-loop 时**:计数由 today-loop 台账的 `consecutive_failures` + 本脚本双轨(脚本文件不被 compact,台账供 SELECT 回读,见判据 §3/§5)。

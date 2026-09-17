@@ -27,7 +27,7 @@
   "read_only_paths": ["repo-relative/path"],
   "forbidden_actions": ["delete", "push", "external-delivery"],
   "human_gates": ["four-red-lines", "scope-expansion"],
-  "budgets": {"max_plans": 3, "max_consecutive_failures": 2},
+  "budgets": {"max_plans": 3, "max_consecutive_failures": 3},
   "terminal_evidence": ["[repo-relative]/runs/<run_id>/state.json", "[repo-relative]/runs/<run_id>/events.jsonl", "[repo-relative]/runs/<run_id>/handoff.md"]
 }
 ```
@@ -75,13 +75,13 @@
 - SELF_CHECK 必须给出结构证据；JURY 必须由独立 reviewer 给出 `PASS | REWORK | WAIT_HUMAN`。JURY 没有通用 `advance` 出口；只有 `review-pass` 能校验 verdict 文件（PASS、plan id 匹配、reviewer 与 executor 不同）并进入 CHECKPOINT。
 - reviewer 尚在运行或短轮询无结果是 `PENDING`，不算失败；hard deadline 后仍无有效 verdict 才进入 `WAIT_HUMAN`。
 - PASS 只接受实际存在的 evidence 文件，且前置状态必须是 reviewer PASS + CHECKPOINT；成功会把连续失败清零。
-- 第一次失败进入 REWORK；第二次连续失败进入 HALTED，不得第三次尝试。
+- 第一次、第二次连续失败进入 REWORK；第三次连续失败进入 HALTED，不得第四次尝试。换建议、agent 或 session 不重置同一失败键的计数。
 
 ## 4. 唯一终态
 
 - `COMPLETE`：全部 plan 为 `passed`，并逐项确认 `terminal_evidence` 是 run dir 内实际存在的文件；默认必须含 handoff。
 - `WAIT_HUMAN`：权限越界、显式人工门、无有效 reviewer verdict、schema 不可自愈。
-- `HALTED`：两连败、四红线、不可恢复错误。
+- `HALTED`：同一任务/方案第 3 次失败、四红线、不可恢复错误。
 
 只有上述三态允许 `/goal` 结束。checkpoint 不是 Goal 终态；context 切换、三终态时才写完整 handoff。
 

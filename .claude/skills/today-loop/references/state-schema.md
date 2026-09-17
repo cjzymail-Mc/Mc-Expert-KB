@@ -18,7 +18,7 @@
 | `phase` | string | `select/preflight/build/self_check/jury/checkpoint/terminal` |
 | `current_plan` | string/null | 至多一个；终态可为空 |
 | `last_verdict` | string/null | `PASS/REWORK/WAIT_HUMAN/PENDING` 或空 |
-| `consecutive_failures` | integer | 0..2；到 2 时必须 halted |
+| `consecutive_failures` | integer | 0..3；到 3 时必须 halted |
 | `plans` | array | id 唯一；状态见下 |
 
 plan 字段：`id/title/depends_on/**done_when**/**reference(可选)**/status/attempts/evidence/review_evidence/last_error`。plan 状态只允许 `pending/running/rework/passed/failed/wait_human`。
@@ -41,7 +41,7 @@ plan 字段：`id/title/depends_on/**done_when**/**reference(可选)**/status/at
 | `pending-review` | phase jury | verdict=`PENDING`，不计失败 |
 | `review-pass` | phase jury；独立 reviewer PASS 文件有效 | verdict=`PASS`，phase=`checkpoint` |
 | `pass` | phase checkpoint；review PASS；证据文件存在 | plan=`passed`，failure=0，回 select |
-| `fail` | plan running；原因非空 | 第一次 plan=`rework`；第二次 plan=`failed`, run=`halted` |
+| `fail` | plan running；原因非空 | 第一次/第二次 plan=`rework`；第三次 plan=`failed`, run=`halted` |
 | `wait-human` | run running；原因非空 | plan/run=`wait_human`，终态 |
 | `redline` | run running；原因非空 | run=`halted`，终态，不计普通失败 |
 | `complete` | 所有 plan passed；全部终态证据文件位于 run dir 且存在 | run=`complete`，终态 |
@@ -54,6 +54,6 @@ plan 字段：`id/title/depends_on/**done_when**/**reference(可选)**/status/at
 4. 三终态不可变；后续动作只能 show/select，不得恢复写入。
 5. context 压缩或新 turn 时只读合同与台账即可恢复：running plan 按 `phase` 续；rework 重新 start；passed 跳过。
 6. `PENDING` 只表示 reviewer 尚未形成有效终态，不计失败、不启动第二 reviewer。
-7. plan 最多 start 两次；第二次失败后 run 终态化，第三次 start 在状态机层拒绝。
+7. plan 最多 start 三次；第三次失败后 run 终态化，第四次 start 在状态机层拒绝。
 8. event-first 提交：event 带连续序号及完整 `state_after`，随后原子替换 state；中断恢复只允许 event 比 state 领先，并从最后 event 重放。序号相等时规范化比较 state 与最后 event 的 `state_after`；内容漂移、缺号、坏行、state 超前均停止人工检查。
 9. 冻结输入每个可变动作前重算 hash；路径必须 repo-relative，并对已存在祖先解析 reparse target，防 repo 内 junction/symlink 逃逸。

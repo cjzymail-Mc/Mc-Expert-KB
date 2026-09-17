@@ -72,7 +72,7 @@ Goal 运行中：
 - 新出现但可延后的权限需求写入 `pending-human`，继续其他互不依赖的安全工作，并集中到最终人工门。
 - 新权限若是继续执行的硬依赖，停止发起该动作并转 `WAIT_HUMAN`；不得换命令、换路径绕过。
 - `auto_review` 只是意外权限请求的概率性后备，不扩大 sandbox、writable roots、network 或 protected paths，也不是“全程无弹窗”的保证。
-- 销毁性/不可逆、对外交付或 Ldterm 明文合规、连失 2 次、推翻 KB 已封决策继续由 `AGENTS.md` 四红线即时停机；四红线不能被启动前预授权豁免。
+- 销毁性/不可逆、对外交付或 Ldterm 明文合规、同一任务/方案第 3 次失败、推翻 KB 已封决策继续由 `AGENTS.md` 四红线即时停机；四红线不能被启动前预授权豁免。reviewer transport 等基础设施重试仍守本文件自己的 2 次局部阈值，不与任务失败计数混算。
 
 ## 4. Native child 与独立子进程
 

@@ -94,7 +94,7 @@
 **Q4 · lead 没有 agent md，怎么控制它的行为/放权深度？**
 - lead 行为只有两个承载位（都是**软门**，靠遵守）：① **目标 repo 的 `CLAUDE.md`**（持久、每会话自动加载，写硬约定）；② **建队 prompt**（单次任务级）。
 - 真·**硬门**只有两处：**permission settings**（harness 层卡工具调用）+ 对 teammate 要求 **plan approval**（lead 批了才动手；可在 prompt 给审批标准，如"只批含测试覆盖的 plan"）。
-- 不放权：CLAUDE.md/prompt 写"每决策点停下问用户、coder 改动必须批 plan" + permission 不预批高风险；放权：写"lead 自主审批/派活，仅连失 2 次或高风险上报"（高风险/权限类命令走「后置人工门 + 落盘上报」、**非 B 自主流程中途的阻塞式权限框**，见 `decisions/autopilot-defer-perm-to-human-gate`）。
+- 不放权：CLAUDE.md/prompt 写“每决策点停下问用户、coder 改动必须批 plan” + permission 不预批高风险；放权：写“lead 自主审批/派活，仅同一任务/方案第 3 次失败或高风险上报”（高风险/权限类命令走「后置人工门 + 落盘上报」、**非 B 自主流程中途的阻塞式权限框**，见 `decisions/autopilot-defer-perm-to-human-gate`）。
 
 **Q5 · teammate 能跑非 Claude 模型（智谱 GLM 等）吗？**
 - **不能**。①CC 的「3P providers」仅 **Bedrock/Vertex/Foundry**，且都是**托管 Claude** 的云，不是跑 GLM 的口子；②teammate 的 `model` 只认 Claude 档位（sonnet/opus/haiku 别名或 Claude 全 ID；feature request #34821 求自定义别名=现不支持）；③provider 是**会话/进程级**设置，in-process teammate 共享 lead 进程 → **整队同一 backend，无法一队混 Anthropic+智谱**。
@@ -119,7 +119,7 @@ subagent = 单 session 内、只向主 agent 回报、主 agent 管全部、toke
 
 - **握全量交接（team-progress 自足）+ 工作主体是直写代码 + 风险 COM 自检 → 优先 solo，别为"该用 team"另建冷启动 team。** spawn agent 每次冷启动、重推已有上下文，是最贵的路径；交接已自足时再起队 = 纯浪费。〔Agent-4 2026-06-03：旧 team 的 coder 正是冷启动卡死在 COM 阻塞，本会话 solo 反而两步跑通〕
 - 判据（全中才 solo）：① 已握全量上下文（交接自足 / 决策全锁，不必重跑 planner/mc-expert）；② 工作主体直写代码 + 自检，编排复杂度低。**反之值得 team**：上下文需多源汇聚 / 需并行多角色 / 决策未定需 mc-expert 挑战。
-- solo 也守 lead 职责：维护 team-progress 落盘、COM 套 20-30s 硬超时、连失 2 次 CUTOVER。
+- solo 也守 lead 职责：维护 team-progress 落盘；COM 套 20-30s 硬超时，连续超时 2 次即 CUTOVER（基础设施例外，不等同任务/方案 3-fail 熔断）。
 - **关键验收门：solo 干多级验收时，每个 L 门交用户前先派 `mc-expert` 带验收背景陪审**——实证抓到过 lead 漏的 chart `.rels` 红线；mc-expert 标「必须补的动作」按阻塞项处理。〔Agent-4 `keygate-mc-expert-jury`〕
 
 相关：[[repo-map]]（Stage 3 指针）、[[decisions/orchestrator-route]]（编排权留主 Claude，team lead 不等于放权）、agent 本体 `.claude/agents/mc-expert.md`

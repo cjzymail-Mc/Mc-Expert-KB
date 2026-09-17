@@ -23,7 +23,7 @@
     "interactive_actions": "forbidden",
     "unexpected_approval": "defer-or-wait-human"
   },
-  "budgets": {"max_plans": 2, "max_consecutive_failures": 2},
+  "budgets": {"max_plans": 2, "max_consecutive_failures": 3},
   "terminal_evidence": ["state.json", "events.jsonl"]
 }
 ```
@@ -32,7 +32,7 @@
 
 - `mode` 只能是 `autopilot`。
 - `allowed_paths`、`human_gates`、`terminal_evidence` 不得为空。
-- `max_consecutive_failures` 必须为 2；不得由模型临时放宽。
+- `max_consecutive_failures` 必须为 3；不得由模型临时放宽或缩窄。
 - `run_dir`、`plan_file` 与全部 allowed path 必须位于当前 repo；外部路径直接 `WAIT_HUMAN`。
 - authorization pack 必须列出允许写路径、只读输入、计划命令类别、reviewer 路由、禁止动作、人工门与意外权限策略；Goal objective 的唯一 `UNATTENDED_AUTH_SHA256` 必须与文件实际小写 SHA-256 相同。
 - `goal_is_go=true`：禁止设计“只创建 Goal 后暂停”的第一条消息；一条 `/goal` 即启动。
@@ -76,7 +76,8 @@
 pending -> running -> passed
                   \-> rework -> running
                   \-> wait_human (run terminal)
-                  \-> failed (第二次连续失败，run halted)
+                  \-> rework (第二次连续失败)
+                  \-> failed (第三次连续失败，run halted)
 all passed -> complete
 ```
 

@@ -105,7 +105,7 @@ if ($Action -eq 'init') {
     if (@($contract.allowed_paths).Count -eq 0) { throw 'ALLOWED_PATHS_REQUIRED' }
     if (@($contract.human_gates).Count -eq 0) { throw 'HUMAN_GATES_REQUIRED' }
     if (@($contract.terminal_evidence).Count -eq 0) { throw 'TERMINAL_EVIDENCE_REQUIRED' }
-    if ($contract.budgets.max_consecutive_failures -ne 2) { throw 'FAILURE_BUDGET_MUST_EQUAL_2' }
+    if ($contract.budgets.max_consecutive_failures -ne 3) { throw 'FAILURE_BUDGET_MUST_EQUAL_3' }
     if (@($planSpec.plans).Count -eq 0) { throw 'PLANS_REQUIRED' }
     if (@($planSpec.plans).Count -gt [int]$contract.budgets.max_plans) { throw 'PLAN_BUDGET_EXCEEDED' }
 
@@ -264,18 +264,18 @@ switch ($Action) {
         if ([string]::IsNullOrWhiteSpace($Reason)) { throw 'FAIL_REASON_REQUIRED' }
         $state.consecutive_failures = [int]$state.consecutive_failures + 1
         $plan.last_error = $Reason
-        if ([int]$state.consecutive_failures -ge 2) {
+        if ([int]$state.consecutive_failures -ge 3) {
             $plan.status = 'failed'
             $state.status = 'halted'
             Write-State $state
             Add-Event 'run_halted' @{ plan_id = $plan.id; consecutive_failures = $state.consecutive_failures; reason = $Reason }
-            Write-Output "AUTOPILOT_STOP:$($plan.id):2"
+            Write-Output "AUTOPILOT_STOP:$($plan.id):$($state.consecutive_failures)"
             exit 2
         }
         $plan.status = 'rework'
         Write-State $state
         Add-Event 'plan_rework' @{ plan_id = $plan.id; consecutive_failures = $state.consecutive_failures; reason = $Reason }
-        Write-Output "PLAN_REWORK:$($plan.id):1"
+        Write-Output "PLAN_REWORK:$($plan.id):$($state.consecutive_failures)"
     }
     'wait-human' {
         Assert-RunMutable $state

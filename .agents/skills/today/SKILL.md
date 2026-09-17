@@ -27,7 +27,7 @@ pwsh -NoProfile -File (Join-Path (Join-Path $env:USERPROFILE '.agents\skills\_mc
 
 today-core 找不到、读取失败或 contract 不完整时 fail-loud，停止执行；禁止只凭 today 入口、旧 adapter 残留或本地复制内容继续。若未来 today 母本不再委托 core，则按当时入口声明执行，不臆造二次调用。
 
-完整流程来源：today §1 负责 mode gate；today-core §0 校验 contract、§1 执行调度、§2.1 收尾 `$mc-update → (pin 提案) → $session-new`、§2.2 连失 2 次熔断。Claude-only 机制按下表替换。
+完整流程来源：today §1 负责 mode gate；today-core §0 校验 contract、§1 执行调度、§2.1 收尾 `$mc-update → (pin 提案) → $session-new`、§2.2 同一任务/方案第 3 次失败熔断。Claude-only 机制按下表替换。
 
 ## 第二步：第0步全托管前置门（读母本后第一动作 · 必做 · 禁跳）
 
@@ -135,19 +135,19 @@ today-core §2.1 拥有唯一一次收尾，顺序为 `$mc-update → (pin 提�
 2. **pin 提案**：收尾时若有用户当场纠正待 pin（本会话或上一会话遗留），完成判别、陪审与去重后产结构化 `PIN/DROP/DEGRADED` 清单，字段与 plan02 minimal schema 对齐，并交 `$session-new` 写入 handoff 供人工门批量落账；finalizer 不调 `$pin` skill / pin_capture.py。无待 pin 纠正则跳过。
 3. **`$session-new`**：调 `$session-new`（含第 0 步主线回顾 + 产 plan + 状态文件更新 + 汇报）。重入幂等（本会话 plan 已存在→只更新主线/状态、不堆重复 plan）。
 
-## 连失2次熔断（仅全托管，替代 today-core §2.2 · 硬执行 · 禁跳）
+## 同一任务/方案第 3 次失败熔断（仅全托管，替代 today-core §2.2 · 硬执行 · 禁跳）
 
 today-core §2.2 用 `autopilot_failcount.ps1`（Claude 路径），Codex 替换为：
 
 - 唯一脚本路径：`$env:USERPROFILE/.agents/skills/_mc-common/codex-failcount.ps1`（2026-07-12 实测 `-Mode reset` 成功；旧写法从 repo cwd 不存在，禁引）。
 - 用户在普通 TUI 明确选 2，或在 active Goal 初始 objective 明确写入唯一 `TODAY_MODE=2` 后，进入 today-core 前必须且只执行一次：`pwsh -NoProfile -File (Join-Path (Join-Path $env:USERPROFILE '.agents\skills\_mc-common') 'codex-failcount.ps1') -Mode reset`。
 - 每个**语义任务步骤**结束判一次：确实失败 → `-Mode fail`；确实成功 → `-Mode reset`。不能只在口头里记。
-- 见到 `AUTOPILOT_STOP` 或退出码 2 → **立即停、交用户、不再试第 3 次**。
+- 见到 `AUTOPILOT_STOP` 或退出码 2 → **立即停、交用户、不再试第 4 次**。
 - 默认计数文件 `%TEMP%\codex-failcount.json`（避 `~/.claude` + 监控盘）。脚本缺失/受限时降级到 repo `output/` 自维护 JSON、明确标注降级。
 
 ## 4 红线（全托管+普通都生效，today §1 / core §2.2）
 
-①销毁性/不可逆（多文件删除/覆盖无备份——guard-delete hook 确定性兜底）②对外交付物/Ldterm 明文合规 ③连失2次 ④推翻 KB `decisions/` 已封决策 → **halt：不执行 + 落盘报告 + 上报**，不靠阻塞式权限框。guard hook + sandbox + auto_review 在 adapter 层之下多重兜底。
+①销毁性/不可逆（多文件删除/覆盖无备份——guard-delete hook 确定性兜底）②对外交付物/Ldterm 明文合规 ③同一任务/方案第 3 次失败 ④推翻 KB `decisions/` 已封决策 → **halt：不执行 + 落盘报告 + 上报**，不靠阻塞式权限框。guard hook + sandbox + auto_review 在 adapter 层之下多重兜底。
 
 ## Claude-only 诚实标注原则（plan02 §6 风险3）
 

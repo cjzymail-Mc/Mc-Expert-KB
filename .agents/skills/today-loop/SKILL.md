@@ -1,6 +1,6 @@
 ---
 name: today-loop
-description: "在 Codex Goal 内按一次性 Run Contract 自动顺序执行多个低风险 plan，使用持久台账处理依赖、跨-plan checkpoint、独立陪审、两连败和 COMPLETE/HALTED/WAIT_HUMAN 终态。用于用户显式要求多-plan 无人值守推进；仅手工 $today-loop 触发。"
+description: "在 Codex Goal 内按一次性 Run Contract 自动顺序执行多个低风险 plan，使用持久台账处理依赖、跨-plan checkpoint、独立陪审、同一任务/方案第 3 次失败熔断和 COMPLETE/HALTED/WAIT_HUMAN 终态。用于用户显式要求多-plan 无人值守推进；仅手工 $today-loop 触发。"
 ---
 
 # `$today-loop`
@@ -64,7 +64,7 @@ pwsh -NoProfile -File (Join-Path $env:USERPROFILE '.agents\skills\today-loop\scr
 7. 独立陪审按共同 binding 路由。reviewer 判 PASS 前必须明确回答当前 `done_when` 是否满足及对应证据；不得用动作完成代替结果完成。native child 的 `No agents completed yet`/active wait timeout 只记 `PENDING`，每 20–30 秒轮询且同一 checkpoint 只保留一个 active reviewer；达到 600 秒 hard deadline 或其他终态 transport failure 才计一次失败。仅当冻结合同与 authorization pack 明确批准时，可 fresh 切换到只读 isolated subprocess；两次终态失败才 `wait-human`。
 8. verdict：
    - PASS：带 evidence 调 `pass`，本 turn 结束，让 Goal 自动续轮。
-   - REWORK：调 `fail`；第一次回到 rework，第二次脚本写 HALTED、输出 `AUTOPILOT_STOP` 并退出 2；不得第三次。
+   - REWORK：调 `fail`；第一次、第二次回到 rework，第三次脚本写 HALTED、输出 `AUTOPILOT_STOP` 并退出 2；不得第四次。
    - WAIT_HUMAN/四红线：调 `wait-human`，不继续选 plan。
 9. 所有 plan PASS 后调 `complete`；只有 state=`complete` 才允许把 Goal 标 complete。
 
@@ -72,7 +72,7 @@ pwsh -NoProfile -File (Join-Path $env:USERPROFILE '.agents\skills\today-loop\scr
 
 - `running`：本 turn checkpoint 后正常结束，Goal objective 未完成，等待自动续轮。
 - `complete`：读取最终 state/events，确认无 running/pending/rework 后标 Goal complete。
-- `halted`/`wait_human`：零写入重复回读并报告；仅按当前 Goal 产品合同允许的 blocked 阈值处理，不能为了结束 Goal 篡改台账或继续第三次。
+- `halted`/`wait_human`：零写入重复回读并报告；仅按当前 Goal 产品合同允许的 blocked 阈值处理，不能为了结束 Goal 篡改台账或继续第四次。
 
 ## 4. 所有权与边界
 

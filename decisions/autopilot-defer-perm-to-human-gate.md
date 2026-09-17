@@ -22,4 +22,4 @@
 
 **原档指针**：`[Agent-4 Claude] Wu Prj/.claude/auto-memory/feedback_autopilot_defer_perm_command_to_human_gate.md`（2026-06-20 事故复盘原文）
 
-相关决策：[[kb-memory-boundary]]；反射簇 [[../reflexes]]（2-fail 熔断 / 不编辑产物）；交互式删除纪律 [[../references/cc-permissions]] 第 6 条；放权机制 [[../references/agent-teams]]（lead 放权深度 / idle-零正文死锁的另一面）
+相关决策：[[kb-memory-boundary]]；反射簇 [[../reflexes]]（3-fail 任务/方案熔断 / COM 2 次超时 CUTOVER / 不编辑产物）；交互式删除纪律 [[../references/cc-permissions]] 第 6 条；放权机制 [[../references/agent-teams]]（lead 放权深度 / idle-零正文死锁的另一面）

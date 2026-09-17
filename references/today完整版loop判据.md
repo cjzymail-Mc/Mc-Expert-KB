@@ -1,6 +1,6 @@
 # today 完整版 loop 判据（/today-loop · 单一指针）
 
-> **定位**：`/today-loop`（完整版 loop 独立入口）的**判据单一来源**。Run Contract（一次性授权包）、状态机迁移、每阶段 PASS / REWORK / WAIT_HUMAN 判据、compact 韧性、台账 schema 校验、两连败守卫的归属——**改判据只改这一处**。
+> **定位**：`/today-loop`（完整版 loop 独立入口）的**判据单一来源**。Run Contract（一次性授权包）、状态机迁移、每阶段 PASS / REWORK / WAIT_HUMAN 判据、compact 韧性、台账 schema 校验、第 3 次失败熔断守卫的归属——**改判据只改这一处**。
 >
 > **与姊妹文件的关系**：本文件是「完整版 loop（多 plan、跨 turn、跨 session、`/goal` 续轮）」的判据；`收尾loop判据.md` 是「单 plan 收尾三段（mc-update→pin→session-new）里的 pin 补漏层」判据。两者正交：完整版 loop 的 CHECKPOINT 阶段**仍引用 `收尾loop判据.md`** 做 pin 段，本文件不重复 pin 判据正文。
 >
@@ -39,7 +39,7 @@
 | `forbidden_actions` | 删除、无备份覆盖、push、对外交付、工作区外读写等 | 与 4 红线第 1/2 条对齐 |
 | `decision_policy` | 默认 > 历史成功率最高 > 最易回滚 | tie-break 顺序，SELECT/BUILD 选用 |
 | `human_gates` | 用户显式保留的素材/成品验收门 | 命中即 `WAIT_HUMAN`，全托管也不跳 |
-| `budgets` | 最大阶段数、最大返修次数、两连败、最长运行时间 | goal condition 里的 `stop after N turns` 与此对齐 |
+| `budgets` | 最大阶段数、最大返修次数、第 3 次失败熔断、最长运行时间 | goal condition 里的 `stop after N turns` 与此对齐 |
 | `finalizer_policy` | mc-update/pin/session-new 在 full-loop 下的调用语义 | 见 §6 CHECKPOINT，D3/D4 落地 |
 
 ### 1.1 启动前权限预检（kickoff 必做，禁止等用户离开后碰权限框）
@@ -62,9 +62,9 @@ today-loop 的 BUILD 阶段调 today-core 执行本阶段（见 §2 状态机 `R
 ## 2. 状态机（source of truth = plan11 §6，本表是其判据化）
 
 > **★ 关键守卫标注（Phase 0 §6 F3 发现的文档清晰度缺口，本条补齐）**：
-> 下表是**无状态骨架**——`RUNNING:SELF_CHECK fail -> REWORK` 是通用迁移。但 plan §6.4 规定"返修仍失败即连续失败 2 次，立即 HALTED，不试第 3 次"。**纯迁移表表达不了"基于 `consecutive_failures` 计数的有状态守卫"**。
+> 下表是**无状态骨架**——`RUNNING:SELF_CHECK fail -> REWORK` 是通用迁移。现行规则规定：同一任务/方案前两次失败进入 REWORK，第 3 次失败立即 HALTED，不试第 4 次。**纯迁移表表达不了“基于 `consecutive_failures` 计数的有状态守卫”**。
 >
-> 所以读这张表时必须同步读 §3 的**两连败守卫**：`consecutive_failures >= 2` 时，`SELF_CHECK fail` 改迁 `HALTED`（而非 `REWORK`），由 `autopilot_failcount.ps1` 确定性计数层兜底。**状态机表本身只表达无状态骨架，计数守卫不靠迁移表自足。**
+> 所以读这张表时必须同步读 §3 的**第 3 次失败熔断守卫**：`consecutive_failures >= 3` 时，`SELF_CHECK fail` 改迁 `HALTED`（而非 `REWORK`），由 `autopilot_failcount.ps1` 确定性计数层兜底。**状态机表本身只表达无状态骨架，计数守卫不靠迁移表自足。**
 
 | 当前态 | 事件 / 动作 | 下一态 | 守卫 / 备注 |
 |---|---|---|---|
@@ -72,12 +72,12 @@ today-loop 的 BUILD 阶段调 today-core 执行本阶段（见 §2 状态机 `R
 | `RUNNING:SELECT` | 选下一个未完成且依赖已满足的阶段 | `RUNNING:PREFLIGHT` / `COMPLETE` | 无 pending → COMPLETE；**每 turn 开头必回读台账 + 复述状态进对话**（§5 compact 韧性） |
 | `RUNNING:PREFLIGHT` | 路径、权限、备份、成功标准预检 | `RUNNING:BUILD` / `WAIT_HUMAN` | 路径/动作不在 Run Contract → `out_of_scope` → WAIT_HUMAN（§7 权限越界） |
 | `RUNNING:BUILD` | 调 today-core 执行本阶段 | `RUNNING:SELF_CHECK` / `REWORK` / `HALTED` | 命中红线 → HALTED |
-| `RUNNING:SELF_CHECK` | 结构性 + 任务专属验收 | `RUNNING:JURY` / `REWORK` | **fail 时查 `consecutive_failures`：≥2 → HALTED（守卫），<2 → REWORK**（§3） |
+| `RUNNING:SELF_CHECK` | 结构性 + 任务专属验收 | `RUNNING:JURY` / `REWORK` | **fail 时查 `consecutive_failures`：≥3 → HALTED（守卫），<3 → REWORK**（§3） |
 | `RUNNING:JURY` | mc-expert 独立陪审 | `RUNNING:CHECKPOINT` / `REWORK` / `WAIT_HUMAN` | 无 verdict → WAIT_HUMAN（§8.2，不得冒充 PASS） |
-| `REWORK` | 按 issue 清单返修一次，重新 Build | `RUNNING:SELF_CHECK` / `HALTED` | 返修计入 `consecutive_failures`；到 2 即 HALTED |
+| `REWORK` | 按 issue 清单返修，重新 Build | `RUNNING:SELF_CHECK` / `HALTED` | 前两次失败均可返修；计数到 3 即 HALTED |
 | `RUNNING:CHECKPOINT` | 更新台账，跑 full-loop 版收尾固化 | `RUNNING:SELECT` | completed_stages 追加本阶段；重入幂等（§4） |
 | `WAIT_HUMAN` | 落盘卡点/待判项，不再自动动作 | 终态，等用户恢复 | 走「不执行 + 落盘 + 上报」，**不弹阻塞框** |
-| `HALTED` | 两连败 / 红线 / 不可恢复错误 | 终态，等用户恢复 | 绝不试第 3 次 |
+| `HALTED` | 同一任务/方案第 3 次失败 / 红线 / 不可恢复错误 | 终态，等用户恢复 | 绝不试第 4 次 |
 | `COMPLETE` | 总证据全过，生成最终报告 | 终态 | terminal_evidence 全满足 |
 
 ### 2.1 SELECT：谁决定"下一 plan"（优先级）
@@ -97,9 +97,9 @@ today-loop 的 BUILD 阶段调 today-core 执行本阶段（见 §2 状态机 `R
 
 ---
 
-## 3. 两连败守卫（有状态，靠 `autopilot_failcount.ps1` 兜底）
+## 3. 第 3 次失败熔断守卫（有状态，靠 `autopilot_failcount.ps1` 兜底）
 
-> 这是 §2 状态机表**表达不了**的部分（Phase 0 §6 F3 抓到的文档清晰度缺口）。状态机表是无状态骨架，"连续失败 2 次"是基于计数的有状态守卫，必须单列。
+> 这是 §2 状态机表**表达不了**的部分（Phase 0 §6 F3 抓到的文档清晰度缺口）。状态机表是无状态骨架，“同一任务/方案第 3 次失败熔断”是基于计数的有状态守卫，必须单列。
 
 **为什么用脚本而非自记**：阈值计数不能靠 Claude 自己记——context 压缩会丢计数、"再试一次"倾向会越过阈值。确定性交给计数文件 + 固定脚本，Claude 只负责"认这次成/败"。
 
@@ -111,12 +111,12 @@ pwsh -File "$env:USERPROFILE\.claude\commands\autopilot_failcount.ps1" -Mode <re
 **判据**：
 - 完整 loop 开跑 **先 `-Mode reset` 清零**（`consecutive_failures = 0`）。
 - 每个 `RUNNING:SELF_CHECK` 判定后：这步**确实失败** → 跑 `-Mode fail`；**确实成功** → 跑 `-Mode reset`（成功即断 streak）。成/败是语义判断，不是每个微动作都记。
-- 脚本累计达 2 时输出 `AUTOPILOT_STOP`（带 🛑）并退出码 2。
-- **见到 `AUTOPILOT_STOP` 或退出码 2，立即 HALTED，把现状 + 卡点交用户，不得再试第 3 次**——要不要继续不由 loop 判断。
+- 脚本累计达 3 时输出 `AUTOPILOT_STOP`（带 🛑）并退出码 2。
+- **见到 `AUTOPILOT_STOP` 或退出码 2，立即 HALTED，把现状 + 卡点交用户，不得再试第 4 次**——要不要继续不由 loop 判断。
 
-**与状态机表的关系（一句话）**：状态机表 `SELF_CHECK fail -> REWORK` 是"`consecutive_failures < 2`"时的迁移；`≥ 2` 时改迁 `HALTED`，这个分支由本守卫的计数结果决定，迁移表本身不重复表达。
+**与状态机表的关系（一句话）**：状态机表 `SELF_CHECK fail -> REWORK` 是“`consecutive_failures < 3`”时的迁移；`≥ 3` 时改迁 `HALTED`，这个分支由本守卫的计数结果决定，迁移表本身不重复表达。
 
-**阳性对照（Phase 0 已做，feedback_negative_needs_positive_control）**：已实测 `autopilot_failcount.ps1` 真实存在（母本 + `~/.claude/commands/` 双份）、`-Mode status` 可读、阈值 2/2、退出码机制在。所以"计数守卫有效"有阳性证据支撑，非空断言。Phase 5 Pilot D 故意造两次连续失败，验"绝不试第 3 次"。
+**阳性对照**：旧 Phase 0 曾对 2/2 阈值做过实测，该旧阈值已被 2026-09-04 用户决策取代，不再作为现行放行证据。当前必须重新验证 `autopilot_failcount.ps1` 的 1/3、2/3 均继续，3/3 输出 `AUTOPILOT_STOP` 且退出码 2，并确认绝不试第 4 次。
 
 ---
 
@@ -171,7 +171,7 @@ schema_version: 1
 1. 读 `status`：若已是三终态（`COMPLETE` / `WAIT_HUMAN` / `HALTED`），loop 结束，不动。
 2. 读 `current_stage` + `completed_stages`：若 `current_stage` 已在 `completed_stages`，说明上轮已 PASS 但未推进 → 直接进 SELECT 选下一阶段，不重跑。
 3. 若 `current_stage` 不在 `completed_stages`：看 `last_evidence` 判断上轮 BUILD 是否已产出未验收的产物 → 有则直接进 SELF_CHECK，无则从 BUILD 重来（重算 `stage_attempt`）。
-4. `stage_attempt` / `consecutive_failures` 保留上次值（不因重入清零，否则两连败守卫失效）。
+4. `stage_attempt` / `consecutive_failures` 保留上次值（不因重入清零，否则第 3 次失败熔断守卫失效）。
 
 ---
 
@@ -189,7 +189,7 @@ schema_version: 1
 - 当前 `run_id` + `status` + `current_stage`；
 - 上轮 `last_jury_verdict`（或 SELF_CHECK 结果）；
 - Run Contract 的 `objective` + `allowed_paths` 一行摘要 + `human_gates`（防 compact 后忘了边界）；
-- `consecutive_failures` 当前值（防 compact 后丢两连败计数——与 §3 计数守卫互为冗余：脚本计数 + 对话复述双保险）。
+- `consecutive_failures` 当前值（防 compact 后丢三次失败计数——与 §3 计数守卫互为冗余：脚本计数 + 对话复述双保险）。
 
 **另注独立 bug**：GitHub issue #66144 反映 auto-compact 偶发"到 100% 不触发"——与 compact 韧性是两个独立问题，Phase 5 pilot 时一并盯。
 
@@ -241,7 +241,7 @@ CHECKPOINT 阶段跑 `mc-update → pin → session-new`，但调整 caller 语�
 
 1. 销毁性 / 不可逆操作（多文件删除、无备份覆盖）。
 2. 对外交付物 / Ldterm 明文合规。
-3. 连续失败 2 次熔断（§3 两连败守卫）。
+3. 同一任务/方案第 3 次失败熔断（§3 计数守卫）。
 4. 推翻 KB `decisions/` 已封决策。
 
 **命中后走**：不执行 → 落盘证据与待人工项 → 状态改 `WAIT_HUMAN` / `HALTED` → 结束 goal。**禁止靠会死等的权限框表达"我停了"**（夜间死锁：弹了会死等缺席用户 + 死锁后台 agent）。
@@ -289,8 +289,8 @@ CHECKPOINT 阶段跑 `mc-update → pin → session-new`，但调整 caller 语�
 | SELECT | 有 pending 且依赖满足 → PREFLIGHT | — | 候选扩大 Run Contract → WAIT_HUMAN |
 | PREFLIGHT | 路径/权限/备份/成功标准全过 → BUILD | — | `out_of_scope` / 无法补备份 → WAIT_HUMAN（§7） |
 | BUILD | 产物产出 → SELF_CHECK | — | 命中红线 → HALTED |
-| SELF_CHECK | 结构性 + 任务专属 + 范围三检全过、有证据 → JURY | 首次 fail 且 `consecutive_failures < 2` → REWORK | `consecutive_failures ≥ 2` → HALTED（§3）；无证据不得 PASS（§8.2） |
-| JURY | mc-expert 给 PASS 且证据齐 → CHECKPOINT | mc-expert 给 REWORK 且 `consecutive_failures < 2` → REWORK | mc-expert 给 WAIT_HUMAN / 命中 human_gate / 无 verdict（重试 1 次仍空）→ WAIT_HUMAN（§8.2） |
+| SELF_CHECK | 结构性 + 任务专属 + 范围三检全过、有证据 → JURY | 第 1/2 次 fail 且 `consecutive_failures < 3` → REWORK | `consecutive_failures ≥ 3` → HALTED（§3）；无证据不得 PASS（§8.2） |
+| JURY | mc-expert 给 PASS 且证据齐 → CHECKPOINT | mc-expert 给 REWORK 且 `consecutive_failures < 3` → REWORK | mc-expert 给 WAIT_HUMAN / 命中 human_gate / 无 verdict（重试 1 次仍空）→ WAIT_HUMAN（§8.2） |
 | CHECKPOINT | 台账更新 + 收尾三段跑完 → SELECT | — | schema 校验不过且不可自愈 → WAIT_HUMAN（§9） |
 
 **陪审 spawn 五要素**（mc-expert 不继承 lead 历史，prompt 必带）：

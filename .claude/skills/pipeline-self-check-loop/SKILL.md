@@ -112,7 +112,7 @@ else:
 | 出口 | 触发条件 | 后续动作 |
 |---|---|---|
 | **DELIVER** | issues 为空 | 写交付 manifest，记录这次产出 |
-| **RETRY** | 有 issue 且 `fixable=True` 且 `attempt < N` | 自动修复后重跑 build；上限通常 **N=2 次**（防止死循环） |
+| **RETRY** | 有 issue 且 `fixable=True` 且 `attempt < N` | 自动修复后重跑 build；上限通常 **N=3 次**（防止死循环） |
 | **ESCALATE** | 严重 issue / 修复轮次用完 / 不可自动修复 | 写 `self-check-report.md` 列出所有 issue 给人审 |
 
 ## 实现要点
@@ -142,9 +142,9 @@ def generate_self_check_report(issues, out_path, ssim_score=-1.0, attempts=1):
     Path(out_path).write_text("\n".join(lines), encoding="utf-8")
 ```
 
-### 2. 自动修复上限 = 2 轮
+### 2. 自动修复上限 = 3 轮
 
-**Why**：超过 2 轮还修不好 = 问题超出自动修复能力，再多轮也是浪费 token。第 3 轮起直接 ESCALATE。
+**Why**：连续 3 轮还修不好 = 问题超出自动修复能力，再多轮也是浪费 token。第 4 轮起直接 ESCALATE。
 
 ### 3. severity 三档制
 
@@ -182,6 +182,6 @@ def generate_self_check_report(issues, out_path, ssim_score=-1.0, attempts=1):
 ## 不要做
 
 - ❌ 不要把 Build 和 Self-check 写到同一个函数里——它们必须解耦，自检要能独立重跑
-- ❌ 不要让自动修复轮次无上限——必须有 `MAX_RETRY=2`
+- ❌ 不要让自动修复轮次无上限——必须有 `MAX_RETRY=3`
 - ❌ 不要把"视觉自检失败"列为严重——SSIM 对文字差异不敏感，单凭它阻断交付会误伤
 - ❌ 不要在 RETRY 路径上跳过 Build，直接重跑 Self-check——必须重新 Build（修复可能改了输入 / 中间产物）

@@ -30,7 +30,7 @@ KB 母本物理位置（写死，**不依赖你的启动目录**）：`D:\Downlo
 
 - `principles.md` — 用户决策偏好卡（确定性 Python > LLM / 稳定 > 新颖 / 文档诚实 / 入库判据 / 交互风格 / 环境硬约束）
 - `decisions/` — 跨 repo 已决决策（orchestrator-route / per-agent-memory-no / acceptance-guardrails / ppt-html-route 等；KB 内务卡如 kb-memory-boundary 不属咨询域，按需才查）
-- `reflexes.md` — 跨 repo 硬反射（COM-only / Ldterm STOP / inspect-first / skills-first / UI-fix-first / 2-fail 熔断 / 不编辑产物 / Excel checkpoint / `-LiteralPath`）
+- `reflexes.md` — 跨 repo 硬反射（COM-only / Ldterm STOP / inspect-first / skills-first / UI-fix-first / 3-fail 任务/方案熔断 / COM 2 次超时 CUTOVER / 不编辑产物 / Excel checkpoint / `-LiteralPath`）
 - `repo-map.md` — 源 repo 地图 + 决策溯源子索引（**这是你的路标**，告诉你 domain 细节去哪取）
 - `references/` — 事实手册（如 cc-permissions）
 
