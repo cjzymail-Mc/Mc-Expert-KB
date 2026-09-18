@@ -55,4 +55,11 @@ Boris 敢全自动无监督靠 CI + code-review 安全网 + 团队 PR 洪流。�
 - **Pro 订阅 OAuth 账号技术上跑不了无人值守定时**（硬约束轴，区别于上面"不该无人值守"的规范轴）：Task Scheduler/schtasks 派生 `claude -p` 用个人 Pro 订阅 token（`subscriptionType:pro`）→ `400 This organization has been disabled`；**同账号同模型交互式派生 ✅、定时派生 ❌**，唯一差别 = 被识别成自动化服务。真无人值守定时**必须用 API Key 账号**（`ANTHROPIC_API_KEY`，为自动化设计、不撞组织禁用）。**⚠️ 易过期**：属 Anthropic 账号策略，可能随政策变，用前复核。〔Mc-emoji feature-05 乙-2a，2026-07-03 实测；另 3 层 stdin 挂死 / MSYS 路径改写 / 代理不继承 = 环境调试细节留源 repo〕
 - **⚠️ 判轴别用错**：「无人值守」是**规范轴/环境轴**（该不该无人值守、技术上跑不跑得了定时），**不是**「自主流程中途权限命令该不该后置」的判轴——后者见 [[../decisions/autopilot-defer-perm-to-human-gate]]，判据轴 = **是否处于 B 自主流程中途**（不是用户在不在场）。两轴常被混用（如实测 today-loop 评估时误用"无人值守→NOT_IN_SCOPE"，推翻了本可做的需求），**混了会错杀需求**——评估自动化场景时先问自己在用哪条轴。〔2026-07-19 claude-glm 核实 today-loop 议题翻车〕
 
+## 8. 自循环空转：无新外部信号的迭代 = 空转（信号轴熔断，2026-08 实证 · 2026-09-18 收割）
+
+- **硬预算**：AI 自循环未消费**新外部信号**（人工裁决 / 答案文件 / 外部真相）的迭代，硬预算**默认 2 轮**——与 [[../reflexes]]「任务/方案第 3 次失败熔断」**正交**：那条管**失败轴**（同一动作连败），本条管**信号轴**（每轮 test 全绿也可能空转：「建门」当进展、任务本体零推进）。〔Agent-3 2026-08-14 mc-expert 陪审 Q4：护栏②广义形态〕
+- **熔断条件**：候选停在人工门后、**无新外部信号的 release = 触发熔断**（里程碑已到再连发即越线）。实证账目：triple-workflow 首日 6 轮建门禁 + 2 轮语义推测 + **0 轮消费人工信号**——答案文件 8-12 起就在磁盘上，6+2 轮没人写脚本消费它。〔Agent-3 KJX2026021 中期评估 2026-08-14〕
+- **裁判验决赛不验训练赛**：生成层的质量问题**摘出 relay/终审循环**——dev 母本迭代到连续 PASS（期间不冻结 manifest、随意改），再一次冻结 release 交 tester/终审验**决赛**。「没完没了」感的来源 = 每个分钟级小 bug 都走整轮协议（循环成本与问题大小失配；门越建越强、生成层没长出能力 → N 个提取问题 = N 轮 relay）。〔Agent-3 diagnosis 2026-08-17 + 收缩当日实效：dev/prod 终稿 SHA256 字节级一致；Mc-emoji 思考14 同核〕
+- **每轮第一验收问题**：不是「test 过了几个」，而是「**新外部信号消费了吗 / 答案 diff 跑了吗**」——答案文件在场 ≠ 答案被消费；把人当仲裁者之前，先问脚本能不能当仲裁者。
+
 **原档指针**：`Mc-emoji/[feature-03-take-a-nap]/Mc未来思考6：Boris-loops机制.md`（全文含 /process-rd 命令实现、claude -p headless 机制、5 件套逐条对照）；思考1（agent≠skill 共性矩阵）。相关：[[agent-teams]]、[[task-decomposition]]、[[../decisions/orchestrator-route]]。

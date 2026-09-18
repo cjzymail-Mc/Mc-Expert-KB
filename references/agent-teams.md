@@ -119,7 +119,9 @@ subagent = 单 session 内、只向主 agent 回报、主 agent 管全部、toke
 
 - **握全量交接（team-progress 自足）+ 工作主体是直写代码 + 风险 COM 自检 → 优先 solo，别为"该用 team"另建冷启动 team。** spawn agent 每次冷启动、重推已有上下文，是最贵的路径；交接已自足时再起队 = 纯浪费。〔Agent-4 2026-06-03：旧 team 的 coder 正是冷启动卡死在 COM 阻塞，本会话 solo 反而两步跑通〕
 - 判据（全中才 solo）：① 已握全量上下文（交接自足 / 决策全锁，不必重跑 planner/mc-expert）；② 工作主体直写代码 + 自检，编排复杂度低。**反之值得 team**：上下文需多源汇聚 / 需并行多角色 / 决策未定需 mc-expert 挑战。
+- **拓扑公式对「脚本驱动串行批处理」形状系统性偏高 T2，靠选型纠偏条 override 落 T3**：7 个 team-task 漏斗 run 实证——coordination_score 3~5 → 公式落 T2，但「单点串行流水线隔 flaky mailbox 汇报 = 自找失败面」的 T3 纠偏条被 5+ 次 override 至 T3 且全程成功（后期 run 判例生效、公式直落 T3）。含义：提示矩阵估的是**协调复杂度**、不是**失败面**——串行批处理协调低但同样该 solo，本条是上面 solo 判据在新形状上的实证补强。〔Wu Prj team-progress-012~018，2026-08-27~09-15；team-task 漏斗提案部分晋升证据 = KB inbox proposal-team-task-funnel-risk-routing-pilot.md（观察期继续，未全量晋升）〕
 - solo 也守 lead 职责：维护 team-progress 落盘；COM 套 20-30s 硬超时，连续超时 2 次即 CUTOVER（基础设施例外，不等同任务/方案 3-fail 熔断）。
 - **关键验收门：solo 干多级验收时，每个 L 门交用户前先派 `mc-expert` 带验收背景陪审**——实证抓到过 lead 漏的 chart `.rels` 红线；mc-expert 标「必须补的动作」按阻塞项处理。〔Agent-4 `keygate-mc-expert-jury`〕
+- **同源陪审盲区 + 陪审调用三规范（2026-09-18 收割，单 repo 起源诚实标注）**：GLM 产出的高影响 plan，同栈 mc-expert 陪审 GO，跨栈原生 Codex 独立评出 **7 个阻断项**（Mc-emoji 思考14 所载 team-task 授权书 v1——授权书属 team-task 工件，思考14 只是编年载体）。归因三结构因（占大头；能力差距真实但仅约 1/3）：① **审的不是同一份东西**——mxp 审 v0 设计概要、Codex 评落盘 v1 终稿，陪审员抓不到自己没见过的文本；② **调用者 prompt 检查单开窄**——六问全历史先例导向，mxp 忠实回答了被问的问题（问题在调用者不在陪审员）；③ **同源共享盲区**——同一模型、不同角色、连任务框架都不同，盲区照样共享。**调用规范三条**：陪审对象 = **落盘终稿**（非设计概要）；prompt 带**控制流推演五问**（身份/时序/幂等/执行体/验收真实性）；高影响终签保留**跨栈或人工硬门**。定位：mxp 验「设计对不对」（历史合法性）、原生验「接口写死没有」（工程可执行性）——**互补两层非替代**（mxp 仍 = 概率软冗余非确定兜底）。〔Mc-emoji 思考14，2026-09-04〕
 
 相关：[[repo-map]]（Stage 3 指针）、[[decisions/orchestrator-route]]（编排权留主 Claude，team lead 不等于放权）、agent 本体 `.claude/agents/mc-expert.md`
