@@ -1,8 +1,8 @@
 ---
 name: team-workflow
-description: Claude-GLM 双窗口有限轮接力。A 按冻结文档规划和独立验收，B 执行现有 team-task；任务交接即时唤醒，空闲静默等待一小时后续待机。用于用户要求 team-workflow 的场景。
+description: Claude-GLM 双窗口有限轮接力。A 按冻结文档规划和独立验收，B 执行现有 team-task（可按 run 参数代起草首轮）；任务交接即时唤醒，空闲静默等待一小时后续待机。用于用户要求 team-workflow 的场景。
 disable-model-invocation: true
-argument-hint: "run | review <冻结文档> [max-round=3] | status | resume | stop"
+argument-hint: "run [<需求文档>] | review <冻结文档> [max-round=3] | status | resume | stop"
 ---
 
 # team-workflow
@@ -11,14 +11,19 @@ argument-hint: "run | review <冻结文档> [max-round=3] | status | resume | st
 
 ## 唯一启动顺序：准备 → B 执行 → A 加入
 
-用户先在讨论窗口（可以是 Codex）生成冻结需求文档，并把**尚未执行的首轮任务**写入 repo 根 `team-task.md`（含「本次任务」与 `done_when`）。讨论窗口只准备文件，不加入双窗口通信。随后：
+先备一份用户认可的冻结需求文档；首轮任务经两条路径之一进入 repo 根 `team-task.md`（含「本次任务」与 `done_when`）：
+
+- 路径一（讨论窗口代写）：在讨论窗口（可以是 Codex）生成冻结文档，并写好尚未执行的首轮任务。讨论窗口只准备文件，不加入双窗口通信。
+- 路径二（B 代起草，简化启动）：用户只备冻结文档，B 用 `/team-workflow run 需求基线.md` 在 init 前自行起草首轮任务写入 team-task.md（起草规则见 `run` 条目）。
+
+随后：
 
 ```text
-先启动 B：/team-workflow run
-稍后启动 A：/team-workflow review 用户需求.md max-round=3
+先启动 B：/team-workflow run [需求基线.md]
+稍后启动 A：/team-workflow review 需求基线.md max-round=3
 ```
 
-**B 是执行者，任务输入只有 team-task.md；A 是裁判，输入是用户指定的基线和 B 的实际产物。** B 不接收、寻找、读取、冻结或校验 A 的基线文件，也不决定总轮数；本轮任务所需的具体执行条款由讨论窗口/A 写进 team-task.md。
+**B 是执行者，任务输入只有 team-task.md；A 是裁判，输入是用户指定的基线和 B 的实际产物。** 除 `run <文档>` 为起草而显式读取该文档外，B 不寻找、读取、冻结或校验 A 的基线文件；即便起草时读过，也不据此绑定基线、生成 criteria 或决定轮数——这些仍只在 A review 时冻结，执行期间的验收依据始终是 team-task 与生效合同。B 也不决定总轮数；本轮任务所需的具体执行条款由讨论窗口/A 写进 team-task.md，或由 B 按用户 run 参数的显式授权起草。
 
 用户在 B 显式启动 run，授权执行当前任务；A 尚未加入时只允许首轮，完成就静默等待。A 的 review 才绑定独立基线和 max-round（默认 3、上限 20），授权在这份基线范围内验收及生成后续任务。每轮 = B 完整执行一次 team-task + A 完整验收一次，已开始的首轮计入上限；全部达标即提前结束，最后一轮仍须验收。不得为了凑轮数添加优化任务。
 
@@ -32,7 +37,7 @@ argument-hint: "run | review <冻结文档> [max-round=3] | status | resume | st
 
 首次使用读 [references/relay.md](references/relay.md) 的命令和 JSON 格式。`run`、`review`、`resume` 都在**本窗口主会话**执行，不能 fork 成 subagent。
 
-- `run`：只接受无参数。B 完整读现有 team-task、repo 硬规则和本轮执行必要的资料/生产 skill；不重写或自行扩展任务，不额外追读 A 的用户需求文档。执行 `init`（不传 baseline/max-round）。helper 核对旧 progress 已收口或为空，备份原始任务与旧 progress，给现成任务仅加 source 标记、保留正文，清空已归档旧进度，直接进入 B_READY。此时 state 尚无 baseline，max_round=null 表示**等 A 绑定、仅限首轮**，不是无限轮次。无须等 A 或全局 criteria；没有基线文件也可开工。任务缺失/旧任务仍执行则拒绝；已有 workflow 时转 status/resume，不覆盖状态。
+- `run [<需求文档>]`：可选一个需求文档路径。**无参数**时行为不变：要求 team-task.md 已备好，B 完整读现有 team-task、repo 硬规则和本轮执行必要的资料/生产 skill；不重写或自行扩展任务，不额外追读 A 的用户需求文档。**带参数**时：`.team-workflow-state.json` 已存在 → 不起草，转 status/resume；team-task.md 缺失或空白（strip 后无可见字符）→ 完整读取该文档（文档缺失/为空则报错停止，不猜任务），把首轮可执行范围起草成自足任务并**自动创建**写入根 team-task.md——「本次任务 + done_when」，写清范围/保留项/验证方法，不照抄全文、不带 source 标记、不写轮数或 criteria——随后把三要素回显在会话内再继续；team-task.md 非空（无论成形与否，含 source 标记异常形态）→ 一律不覆盖不沿用，报告现内容形态并停止，请用户二选一：清理 team-task.md 后重跑带参命令重新起草，或去掉参数沿用现有任务。唯一例外：非空内容就是**本会话刚起草写入、init 尚未成功**的同一份草稿（如 init 瞬时失败后重试），直接重试 init 或去掉参数沿用即可，不必清理。起草读取仅此一次：B 不据此冻结文档 hash、不生成 criteria、不决定总轮数。两种方式随后一致：执行 `init`（不传 baseline/max-round）。helper 核对旧 progress 已收口或为空，备份原始任务与旧 progress，给现成任务仅加 source 标记、保留正文，清空已归档旧进度，直接进入 B_READY。此时 state 尚无 baseline，max_round=null 表示**等 A 绑定、仅限首轮**，不是无限轮次。无须等 A 或全局 criteria；没有基线文件也可开工。任务缺失/旧任务仍执行则拒绝；已有 workflow 时转 status/resume，不覆盖状态。
 - `review <文档> [max-round=N]`：A 先 status，随后**完整读取用户在此命令指定的基线及其依赖**，提取全局 criteria（原文定位、验收方法、保留项、例外边界、模板标注要求），写 criteria-input.json。执行 `join --run ... --baseline <绝对路径> --max-round N --criteria ...`，才冻结基线 hash、轮数和清单并绑定 A。加入不改 B 的 source、progress、合同或当前阶段；B 正在做则静默等待，B 已完成则立即验收交接。已绑定 A 重入须核对参数与原绑定一致，不能换基线、加轮数或重新冻结清单。没有 workflow 则提示先在 B 启动 run；若已 PAUSED/终态，只报告结果，不重开。
 - 每次完成通知/角色工作返回后，先 `status`，核对本窗口 ID、run、round、phase；**通知是提醒，盘上状态才决定轮到谁**。旧通知、重复通知不构成执行许可。
 
@@ -72,7 +77,7 @@ python "<skill-dir>/scripts/workflow.py" wait --repo "<repo>" --session "<本窗
 - `/team-workflow status`：只读当前状态，简报角色、轮数、谁在工作及阻断，不启动循环。A 未加入时标“首轮 / 总轮数待 A 设定”，不要把 null 显示为无限执行。
 - `/team-workflow stop`：原 A/B 调 helper `stop`。若 B 正在执行，只设停止请求；B 在下一个检查点停止新增工作，完成在途写入和团队关闭后 `pause --reason ...` 确认静止。**不杀 Office/其他窗口进程**。停止不等于验收通过。
 - `/team-workflow resume`：只恢复绑定的原 session。按表格继续本窗口回合；首轮 PUBLISHING 由 B 重放 publish。等待方重挂 wait（原 waiter 尚在则沿用）。B 若 B_RUNNING，用户此次显式 resume 先走 helper `resume --reason <用户原话>`，再传返回的单次 resume_token 调内部 runner，复用同一 team_run/source/合同/失败计数，不再跑一个新任务。
-- PAUSED 是人工门，不能靠 resume 静默清除；DONE/LIMIT/CANCELLED 不自动重开。确需全新 workflow 时，用户明确启动新任务后，原窗口先 `archive`（仅终态可用），准备新的未执行任务，再由 B run。本版没有换窗口接管、租约、自动解除熔断或旧版状态迁移。
+- PAUSED 是人工门，不能靠 resume 静默清除；DONE/LIMIT/CANCELLED 不自动重开。确需全新 workflow 时，用户明确启动新任务后，原窗口先 `archive`（仅终态可用），准备新的未执行任务，再由 B run；归档后根 team-task.md 仍残留末轮任务，`run <文档>` 仅在其缺失/空白时自动起草，重开前须先清理。本版没有换窗口接管、租约、自动解除熔断或旧版状态迁移。
 - helper 检出基线/源块/产物漂移、归档冲突等错误时，停止依赖动作并报一次；轮到本窗口且执行体已静止时可 `pause --reason <原始错误>` 留状态。不要手工改 `.team-workflow-state.json`、删状态、重置计数来续跑。
 
-当前成熟度：v0.2，B 先执行任务、A 后绑定独立基线；完整两窗口 Claude-GLM 生产闭环由后续真实使用验证。局部脚本通过不代表模型一定遵循验收判据。
+当前成熟度：v0.3，在 v0.2（B 先执行任务、A 后绑定独立基线）之上新增 `run <需求文档>` 简化启动：B 可在 init 前代起草首轮任务（team-task.md 非空则一律停下请用户清理或去参重跑，不覆盖不沿用）；helper 脚本与状态机未动，A 端 review 流程不变。完整两窗口 Claude-GLM 生产闭环由后续真实使用验证。局部脚本通过不代表模型一定遵循验收判据。

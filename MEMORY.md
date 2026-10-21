@@ -5,7 +5,7 @@
 
 ## 核心文档
 - [principles.md](principles.md) — 用户决策偏好卡（确定性 Python > LLM / 稳定 > 新颖 / 文档诚实 / 入库判据 / 交互风格·人工门最小化+需求冻结基线 / 环境约束）
-- [reflexes.md](reflexes.md) — 跨 repo 硬反射（Office 路径·目标机折算 / inspect-first / skills-first / 先查再下结论·阳性对照 / done_when 阳性对照 + **验收范围禁缩窄/指标禁替换（09-18）** / 3-fail 熔断 + COM 2 次例外 / 不编辑产物 / Excel checkpoint·机器可读真相走确定性 diff / **MAX_PATH 深路径（09-18）** / `-LiteralPath`+Glob`[` / junction / python3 stub），每条挂命中 repo
+- [reflexes.md](reflexes.md) — 跨 repo 硬反射（Office 路径·目标机折算 / inspect-first / skills-first / 先查再下结论·阳性对照 / done_when 阳性对照 + **验收范围禁缩窄/指标禁替换（09-18）** / 3-fail 熔断 + COM 2 次例外 / 不编辑产物 / Excel checkpoint·机器可读真相走确定性 diff / **MAX_PATH 深路径（09-18）** / `-LiteralPath`+Glob`[` / junction / **junction 判定须 `lstat()`（10-21）** / python3 stub），每条挂命中 repo
 - [repo-map.md](repo-map.md) — 源 repo 地图 + 决策溯源子索引
 
 ## decisions/ — 跨 repo 已决决策（不重判，互链）
@@ -200,6 +200,14 @@
 - ⏸ **不收（留档/下轮候选）**：C2 披露≠合法降级（agent-teams 掉线条 append 实例）/ C3 approved_display_alias 审批字段后门 / C5 skill 分发生命周期 / C6 Wu Prj 6 条 feedback 打包 / C7 工作流收敛终局拍板（09-04 已拍，候选待整）/ C8 agent-teams experimental 校准注 / C9 Codex 板块（skill 生态对比、auto-review 边界、allow_implicit_invocation、chatgpt-app 共用 HOME——与本 repo `.agents` 未提交件对照去重后批量决策「是否扩 Codex 面」）。
 - **陪审 GO-with-changes 全纳**：必改 3（B3 落地→配置+复测待验并连带索引钩子 / reflexes↔guardrails 反向互链 / B4 授权书归属 team-task）+ 建议级（B1 事故/复盘日期消歧 + 稳定指针补 inbox 提案 / origin 补 `applied_at` + review 消歧 / override 统一「5+」/ 3-fail 姊妹轴指针 / 「未知模式」句撤引号式转述 / funnel 指针写具体文件名）。**UNVERIFIED_SCOPE 留痕**：B5「305→102」数字未逐字复核（305 有 fangcaixia-07-30 台账实证）、B3 官方两 URL 未在线复核（按 temp.md 08-18 核实记录采信）、C4「未知模式」句未定位逐字原文（已降为转述）。
 - 未提交：本轮 7 件内容层改动（6 改 + 1 新卡）用户手工 commit（可 /mc-commit 理批）。
+
+## 2026-10-21 收割轮（team-workflow v0.3 会话顺手收 · 单条直入库）
+
+> 来源 = Hot-Fix 会话 team-workflow v0.3 升级的 mc-expert 独立评审附产品（junction 检测工具坑，mc-expert 自述第一轮被 stat() 假阴性骗过）。策展人在场，三连问闸门当面对过（3/3：新对照价值 × 双 repo 事件源 × 一条 bullet 零维护），用户拍板「入」。未走 inbox 中转（策展人在场即闸门，先例=两段式判据的"用户择时"极端形态）。
+
+- ✅ **reflexes「环境/工具」簇 append「判『是不是 junction』Python 必须 `lstat()`」**：`stat()`/`os.walk` 穿透 reparse point → 「双份拷贝需同步」假阴性（两侧 hash 相同=同一物理文件）；Glob 拿 junction 当 path 实测静默返空（同底层 Grep 未单测、按同族防范——**比提案稿更收紧的诚实标注**，本会话只实测过 Glob）；正解 `os.lstat()` / `Get-ChildItem -Force` 看 LinkType（junction 常挂子项级、根目录 LinkType 空≠没有）；跨 junction 找文件直接指定真源路径。与 junction 契约条（改前扫引用）为姊妹、同「工具盲区骗你」族。事件源双 repo：Mc-Expert-repo 2026-08-19（用户多次纠正「双侧同步」误判，原话「反复犯了无数次」）+ Hot-Fix 2026-10-21（mc-expert stat() 假阴性亲踩 + Glob 返空同会话实测）；检测语义细节为本次新沉淀、已诚实标注。Hot-Fix 项目侧记忆（userprofile-agents-junctions）同会话已补 lstat 注，两层不冲突。
+- ⏸ **不入：team-workflow v0.3 升级本身**（`run <文档>` B 代起草=skill 操作面，活在 SKILL.md/relay.md + bak 链 + mc-expert 两轮评审记录；先例=06-18「team-task 体系重构 操作落地不入」）。v0.3 成熟度自注「待真实双窗口使用验证」。
+- 未提交：reflexes.md + MEMORY.md 两处，连同同工作区 team-workflow v0.3 三文件（team-workflow SKILL.md / relay.md / team-task SKILL.md），用户手工 commit。
 
 ## 巡检台账（KB-update 前置扫描基线）
 

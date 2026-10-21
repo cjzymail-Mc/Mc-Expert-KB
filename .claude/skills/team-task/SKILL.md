@@ -11,7 +11,7 @@ argument-hint: "[continue-defaults]"
 
 ## team-workflow 受控委托（Claude-GLM 专用）
 
-- 用户先准备首轮 team-task，Claude-GLM 窗口 B 显式 `/team-workflow run` 即授权执行当前任务；B 的需求输入只有 team-task.md，无须基线文档或总轮数。A 稍后 `/team-workflow review <冻结文档> max-round=N` 才绑定独立基线和轮数，并在其范围内验收/生成后续任务；首轮计入 N。A 未加入时 B 完成首轮即等候，不自动开启第二轮。此为显式入口的窄扩展；公共 `/team-task` 的 `disable-model-invocation: true` 保持。
+- 用户准备首轮 team-task，或仅备冻结需求文档由 B 经 `/team-workflow run <文档>` 代起草；Claude-GLM 窗口 B 显式 `/team-workflow run [文档]` 即授权执行当前任务；B 的需求输入只有 team-task.md，无须基线文档或总轮数。A 稍后 `/team-workflow review <冻结文档> max-round=N` 才绑定独立基线和轮数，并在其范围内验收/生成后续任务；首轮计入 N。A 未加入时 B 完成首轮即等候，不自动开启第二轮。此为显式入口的窄扩展；公共 `/team-task` 的 `disable-model-invocation: true` 保持。
 - 唯一内部适配器为同级 `team-workflow-run/SKILL.md`。它必须先经 `team-workflow/scripts/workflow.py enter` 接棒及 `permit`，核对 repo、真实 GLM session、当前 run/round、原文 hash、B 归属与停止状态；无有效许可不得借 Read 本文启动执行。
 - 获许可后完整读取并执行**本文件同一份 P0-P6**，不调用禁用 model invocation 的 `Skill(team-task)`。P0 参数视为空；用 helper 的 `team_run/source_id` 作为 `run_id/source_block_id`，不重新生成；恢复须原 B 的用户显式 resume 单次 token，按既有阶段/合同链继续。
 - 此委托场景中，B 和本轮陪审以 task source + 生效合同为 REQUIREMENTS，只验本轮 done_when；不要求 B 冷启动追读、冻结或核验 A 的独立用户需求文档/criteria。A 承担原始基线全量覆盖，把具体执行要求写进下一轮任务；repo 环境/权限硬规则和实际生产 skill 仍适用，不能借分工跳过。

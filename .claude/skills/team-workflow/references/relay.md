@@ -26,7 +26,7 @@
 
 ## 1. 外部首轮任务与 A 的验收基准
 
-讨论窗口可使用 Codex 或其它工具，先写用户认可的冻结文档和根 team-task.md。任务应含「本次任务 + done_when」，且不混入旧合同。首轮 B init 接受无标记正文或单一有效 open source；只补标记/规范换行，源正文不改，原始字节存 before-start。旧 progress 为空可直接用新任务；ACTIVE/WAIT_HUMAN 等未收口进度、仍带旧合同或 source 已执行过则拒绝，不能把运行中裸 `/team-task` 硬接管。
+首轮任务有两条准备路径：讨论窗口（可使用 Codex 或其它工具）先写用户认可的冻结文档和根 team-task.md；或用户只备冻结文档，用 `/team-workflow run <文档>` 让 B 在 init 前自行起草并写入根 team-task.md（`.team-workflow-state.json` 已存在则不起草、转 status/resume；team-task.md 缺失/空白（空白=strip 后无可见字符）才起草并自动创建，非空则一律停下，请用户清理后重跑或去掉参数沿用）。任务应含「本次任务 + done_when」，且不混入旧合同。B 代起草不冻结基线 hash、不生成 criteria，A 的 join 仍独立冻结。首轮 B init 对两条路径一视同仁：接受无标记正文或单一有效 open source；只补标记/规范换行，源正文不改，原始字节存 before-start。旧 progress 为空可直接用新任务；ACTIVE/WAIT_HUMAN 等未收口进度、仍带旧合同或 source 已执行过则拒绝，不能把运行中裸 `/team-task` 硬接管。
 
 稍后 A 读取用户在 `/team-workflow review <文档> [max-round=N]` 中指定的完整文档，写 criteria-input.json；首次 join 才一起冻结基线 hash、轮数和 criteria.json。不能从 B 的任务、完成报告或自述反推整份基线。这只是提取独立验收判据，不重做首轮执行计划，不要求 B 等它才开工：
 
