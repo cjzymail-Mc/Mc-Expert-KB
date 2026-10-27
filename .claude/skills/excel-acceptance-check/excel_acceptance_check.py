@@ -8,7 +8,7 @@ PASS / FAIL 二元结论 + 必修清单。是 ppt-acceptance-check 的 Excel 姊
 
 护栏（写进设计，不可违反）：
   ① 期望值只来自外部真相：L1 走 inline(仅结构) / excel: DSL(外部 xlsx)，禁 hardcode 工艺单值。
-  ② auto-fix 不在本脚本：脚本只断言不改文件；连续 2 轮没修好 → ESCALATE 给人（主 Claude 编排）。
+  ② auto-fix 不在本脚本：脚本只断言不改文件；连续 3 轮没修好 → ESCALATE 给人（主 Claude 编排）。
   ③ 编排权留主 Claude：本脚本 ReadOnly 打开、只读不写 xlsx、不读写契约。
 
 用法:

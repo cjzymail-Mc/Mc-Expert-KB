@@ -9,11 +9,12 @@
 >
 > ⚠️ **③ 硬事故即时收割（攒批节奏的例外）**：安全阀/事故类经验（halt 死锁 / 销毁性误操作 / 合规红线被触 / 跨入口契约漂移）一旦产生，**当场就走 ① 模式即时收割入 KB，别攒到下次巡检批量处理**——这类多是"严重度豁免"候选（单次高危即可入，不必凑频次≥3），拖着会像 `decisions/autopilot-defer-perm-to-human-gate` 那样**孤儿滞留源 repo 数天、跨入口长期不同步**（该决定 2026-06-20 产生、滞留 5 天才收割）。一般经验仍走攒批/巡检节奏。
 
-1. 读 `MEMORY.md`「巡检台账」拿各源 repo 的**扫描截止(基线)日期**。
-2. 只读扫各源 repo **晚于基线**的过程文件（memory / auto-memory / plan / debug / skills / CLAUDE / STATE），**忽略 office/pdf/ai 原材料**。富矿 repo 深扫到"生成产物层"（plan/思考/方法论 md），不止 auto-memory。
-3. 每个候选先过第 0 步三重闸门预判，分档：强入 / borderline / 不入（注明理由），落成候选清单。
-4. **更新「巡检台账」**：刷新扫描截止日期 + 本轮结论摘要（即便"无新增可入"也记一行，证明扫过了）。
-5. 候选清单交第 1 步等用户挑。**到此停，绝不自动写内容层。**
+1. **先扫本 repo 自己的 inbox**：读 `.claude/auto-memory/`（本 repo 的待审收件箱，[[decisions/kb-memory-boundary]]），但**明确排除 `.claude/auto-memory/pin/` 整个 raw-signal lane**。普通 inbox 候选已经初步提炼、可带进 step 4 闸门；`pin/*.jsonl` 只是给 `/reflect` 的原始纠正信号，不得被 `/KB-update` 直接巡检、晋升或清理。（注意：普通 inbox 里的候选文件可能晚于上轮巡检、也可能早就躺着没处理——凡还没晋升进内容层的，本轮都要重新过一遍闸门，别只看"新不新"。）
+2. 读 `MEMORY.md`「巡检台账」拿各源 repo 的**扫描截止(基线)日期**。
+3. 只读扫各源 repo **晚于基线**的过程文件（memory / auto-memory / plan / debug / skills / CLAUDE / STATE），**忽略 office/pdf/ai 原材料**。富矿 repo 深扫到"生成产物层"（plan/思考/方法论 md），不止 auto-memory。**源 repo 扫描是 inbox 之后的补充**——挖"inbox 还没收进来、但源 repo 已攒够"的料。
+4. 每个候选（inbox 的 + 源 repo 扫出的）先过第 0 步三重闸门预判，分档：强入 / borderline / 不入（注明理由），落成候选清单。
+5. **更新「巡检台账」**：刷新扫描截止日期 + 本轮结论摘要（即便"无新增可入"也记一行，证明扫过了）。
+6. 候选清单交第 1 步等用户挑。**到此停，绝不自动写内容层。**
 
 ## 第 0 步：要不要入 KB？（三重闸门，全过才写）
 
@@ -43,6 +44,8 @@ KB **默认不入**——多一份 = 多一份维护负担、拉低信噪比。�
 | 未晋升的原始反馈 | `.claude/auto-memory/`（**inbox，不是内容层、不进 KB git**） | 原样落，待晋升 |
 
 **红线**（[[decisions/kb-memory-boundary]]）：`.claude/auto-memory/` = 待审 inbox，**绝不自动 merge 进内容层**；晋升必须人工过第 0 步闸门。
+
+其中 `.claude/auto-memory/pin/` 是独立 raw-signal lane：只由 `/reflect`/miner 消化成知识提案，`/KB-update` 不直接摄入其中任何 JSONL。
 
 ## 第 3 步：执行（仅对用户挑中的）
 

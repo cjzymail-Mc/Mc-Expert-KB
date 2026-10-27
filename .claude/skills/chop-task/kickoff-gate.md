@@ -53,6 +53,7 @@
 - **列拍板点（裁量层）**：收敛成封闭选择题（P1: A/B + 默认建议），用 AskUserQuestion。
 - **既不问也不列**：可推导层 → 写进 prompt 让执行者自拆。
 - **防双重拷问**：执行期还会"盘点先行 + 追问义务"再过一遍——chop 只接事实层用户独有项，别和执行期重叠。
+- **team-task 被调用模式**：重缺口可落 `team-progress/questionnaire-<run_id>.md`（schema 见 `../team-task/funnel-gate.md`）；没有墙钟超时，FACT 不默认，只有用户填答或显式 `continue-defaults` 才回收，其中默认仅适用于带安全默认的 PREFERENCE。防双重拷问边界不变。
 
 ---
 

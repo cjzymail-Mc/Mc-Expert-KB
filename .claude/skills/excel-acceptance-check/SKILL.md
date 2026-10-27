@@ -19,7 +19,7 @@ description: Excel 自动化产线交付前的分层验收 skill —— L0 结�
 ## 三护栏（不可违反，写进设计）
 
 1. **期望值只来自外部真相**：L1 业务期望走 `expected_from` 的 `excel_cell:` / `excel:` DSL 从外部 xlsx（规格表/评审表）取，**禁在契约或脚本里 hardcode 工艺单具体业务值**。结构性断言（L0：sheet 名 / 维度 / 列名）豁免，可 inline。
-2. **auto-fix 不在脚本里**：脚本**只断言不改文件**。修复留给主 Claude 编排；**同一问题连改 2 轮没好 → ESCALATE 给人**，不在脚本里无限自动改。
+2. **auto-fix 不在脚本里**：脚本**只断言不改文件**。修复留给主 Claude 编排；**同一问题连改 3 轮没好 → ESCALATE 给人**，不在脚本里无限自动改。
 3. **编排权留主 Claude**：脚本 ReadOnly 打开 xlsx、不写回、不读写契约。
 
 ## 调用方式

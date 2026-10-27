@@ -19,6 +19,7 @@
 - **关键档案**：`[feature-02-auto-Enter]/bypass-plan-discussion.md`、`settings-fix-plan.md`、`[feature-03-take-a-nap]/Mc未来思考3...ADV.md`、`grok-01/02-...chat.md`、`[feature-03-take-a-nap]/sub-plan-stage3-agentteam-spike.md`(Team spike：三角色工作流/落点规范/放权深度)、`grok+claude-03-...chat.md`
 - **Agent Teams 机制事实**：KB 内 `references/agent-teams.md` —— 含 **「新手 FAQ」节**（2026-06-02，首次用 team 7 条入门：env=1 不自动组队/lead 一次性+progress.md/token 单账号/lead 放权深度/teammate 不能跑非 Claude 模型/team×worktree 正交/teammate 默认模型）
 - **CC hook 机制事实**：KB 内 `references/cc-hooks-facts.md`（StopFailure observ-only / UserPromptSubmit exit-2 landmine）。**实现细节留原地**：`[feature-05-loop-self-improvement]/`（自进化捕获网 plan01-05 + progress + `Mc未来思考9`）+ auto-memory `{cc-stopfailure-hook-observ-only, stopfailure-hook-fix, cc-userpromptsubmit-hook-pitfalls}.md` + `[feature-03-take-a-nap]/2026-06-23 API-Error-自动恢复-方案.md`。hook/launcher 母本 = 本 KB repo `.claude/hooks/`。
+- **收尾 loop 判据**：KB 内 `references/收尾loop判据.md`（feature-05 补漏层 · today/free/team-task 三入口收尾段 `mc-update→pin→session-new` 的 "pin" 段共用判据指针：PIN/DROP 规则 + 方案a去重 + 掉线降级 + 陪审五要素集中此文件；判据稳定 2-3 次独立任务后升 `skills/收尾loop/SKILL.md`，届时三入口引 skill 指针、改判据只改一处）。源 plan：`Mc-emoji/[feature-06-codex-workshop]/plan00-today-收尾loop升级.md` v3。
 - **域内/项目状态留原地**（不入 KB）：`capture-wordlist-recall-blindspot`(捕获召回盲区,feature-05 域) / `wuprj-loops-never-ran-for-real`(loop 从没真跑,项目状态) / `mc-emoji-uses-both-3account-junctions`(4 账号双 junction 基建) / `chartjs-bake-overlay-route-validated`(html→ppt 合流 PoC,deck 域)。mc-expert 按需 `--add-dir` 直读。
 
 ## [Agent-4] Wu Prj — 批量替代/改造产线（2026-06 最新富矿）

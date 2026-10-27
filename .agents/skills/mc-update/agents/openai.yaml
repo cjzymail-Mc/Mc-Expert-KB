@@ -1,0 +1,8 @@
+interface:
+  display_name: "MC Update"
+  short_description: "收尾同步文档状态并生成待审知识提案"
+  default_prompt: "Use $mc-update to synchronize repo state and prepare reviewable knowledge proposals."
+
+policy:
+  allow_implicit_invocation: false
+

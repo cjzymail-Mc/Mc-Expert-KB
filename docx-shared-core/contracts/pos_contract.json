@@ -1,0 +1,23 @@
+{
+  "expected_table_count": 2,
+  "required_anchors": ["Quarterly Summary", "REPLACED_OK"],
+  "table_cells": [],
+  "inserted_tables": [
+    {"anchor": "Outro line after table.", "expected_present": true}
+  ],
+  "highlight_contract": {
+    "red_positive_controls": [
+      {"id": "red_probe", "table": 1, "row": 1, "col": 0}
+    ],
+    "red_cells": [
+      {"id": "red_value_cell", "table": 1, "row": 1, "col": 0, "expected_value": "REPLACED_OK"}
+    ],
+    "none_cells": [
+      {"id": "note_cell", "table": 1, "row": 1, "col": 2, "expected_original": "fixed-note"},
+      {"id": "static_a", "table": 1, "row": 2, "col": 0, "expected_original": "static-a"}
+    ],
+    "yellow_cells": [
+      {"id": "yellow_marker", "table": 1, "row": 1, "col": 1, "expected_original": "MANUAL_MARKER"}
+    ]
+  }
+}

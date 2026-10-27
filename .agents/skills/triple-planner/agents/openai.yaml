@@ -1,0 +1,6 @@
+interface:
+  display_name: "Triple Planner"
+  short_description: "跨开发与生产 repo 编排三个会话自动接力和返工闭环"
+  default_prompt: "Use $triple-planner to coordinate a development coder and a production tester across two repositories."
+policy:
+  allow_implicit_invocation: false

@@ -3,7 +3,7 @@
 
 背景（2026-07-02 Q4-3 探针 + mc-expert 陪审）：UserPromptSubmit hook 退出码 2 = CC「阻断并擦除该
 prompt」；而 `python 不存在.py` 恰好退出码 2 → 若直接注册指向高流动 feature 仓的 capture_hook.py，
-脚本一旦移动/删除，3 账号×所有 repo×每条 prompt 全被阻断 = 全局变砖。
+脚本一旦移动/删除，4 账号×所有 repo×每条 prompt 全被阻断 = 全局变砖。
 
 本 launcher 职责唯一：定位 feature 仓的 capture_hook.py，用 runpy 现读现跑（保住"改脚本即时生效" +
 单解释器 + correction_core 单源不劈），**绝不让失败以 exit 2 逃到 CC**（exit 2 = 阻断+擦除 prompt = 砖）。
@@ -16,7 +16,8 @@ prompt 照常继续、不擦除。故：
     （每条 prompt 都提醒"捕获已停、请修"，绝不砖）。
 连 launcher 本身丢（python 跑不起来 = exit 2/127）由注册命令的 `|| exit 1` 兜（见 deploy 脚本）。
 
-CAPTURE_HOOK 路径由 deploy-capture-hook.ps1 部署时注入。**别手工编辑本文件**（保持死简单 = 永不因改动而丢）。
+CAPTURE_HOOK 路径由 deploy-capture-hook.ps1 部署时注入（两级探测：-CaptureHookPath 覆盖 > 向上找
+含 CLAUDE.md 的 repo 根拼 feature-05 仓路径）。**别手工编辑本文件**（保持死简单 = 永不因改动而丢）。
 """
 import os, sys, runpy
 

@@ -30,6 +30,23 @@
 - **流程类**（如何执行某流程）→ 先跑通，等 **2-3 次差异够大的独立任务**验证后再固化 skill（太早固化 = 过拟合单样本）。
 - 两轨用同一节奏处理是错的。〔Agent-4 `sediment-two-tracks`，2026-05-22 教训〕
 
+## 补充（2026-07-20）：候选晋升是**两段式**，别把"走 /KB-update"误解成"当场跑完"
+
+> 源 = Mc-emoji 会话事故复盘（差点直接 Edit KB 内容层被用户拦下，事后核实出正确流程）。**规则在场却不激活**的典型（呼应 [[self-compliance-probabilistic]]）。
+
+源 repo 会话产生跨 repo 候选时，正确流程是**两段式**——**不是**"必须当场跑完整个 `/KB-update`"：
+
+1. **落 inbox**（任何源 repo 会话都可做，**即时**）：把候选原文 / 候选反射扔进 `Mc-Expert-repo/.claude/auto-memory/`（inbox 缓冲，被 `.gitignore` 忽略、不进 git、不污染内容层），标清楚"待晋升候选 / 拟落 reflexes.md"等。
+2. **`/KB-update` 收割**（用户**择时**跑）：前置巡检扫 inbox + 源 repo → 过三重闸门 → 用户审 → 才写内容层。
+
+**边界（物理隔离，本卡核心红线）**：
+- ✅ 写 KB 的 `.claude/auto-memory/`（inbox）= **允许**，它本就是缓冲区，被 ignore、不进 git、不污染内容层。
+- ❌ 直接写 / Edit KB 的**内容层**（`principles` / `decisions` / `reflexes` / `repo-map` / `references` / `MEMORY.md`）= **禁止**，必须经 `/KB-update` 闸门人工策展。
+
+**反复发作的通病**：源 repo 会话"想固化好经验"的执行冲动下，跳过第 1 段、直接奔第 2 段的写盘动作（直接 Edit reflexes.md 等）。正确做法是候选**先进 inbox 暂存**，等用户跑 `/KB-update` 时收割。一个跨 repo 写授权点：其他 repo 会话直接写 KB inbox 涉及 workspace 外路径，会触发跨 repo 写权限门（B 模式自主流程中途按 [[autopilot-defer-perm-to-human-gate]] 后置）——落 inbox 前先确认授权。
+
+原档：`Mc-emoji/temp.md`（2026-07-20 事故复盘全对话）+ 本卡两层表（上）+ `.gitignore` L6（inbox ignore 注释）。
+
 **何时重新评估**：inbox 长期积压无人晋升 → 考虑轻量 curator 流程；出现内容层被 auto 污染的实例 → 加硬校验（如 pre-commit 校验内容层只人工改）。当前都不需要。
 
 **原档指针**：本 session 讨论（2026-06-01，Stage 1 延伸）；入库判据原文见 [[../principles]]「入库/样本判据」段。

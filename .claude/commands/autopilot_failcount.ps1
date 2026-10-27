@@ -1,6 +1,6 @@
-# autopilot_failcount.ps1 — /today 全托管「连续失败 2 次 → 转人工审」确定性计数器
+# autopilot_failcount.ps1 — /today 全托管「同一任务/方案第 3 次连续失败 → 转人工审」确定性计数器
 # 为什么存在:阈值计数不能靠 LLM 自己记(context 压缩会丢计数、"再试一次"会越过阈值)。
-# 确定性来自这个计数文件本身——它扛得住上下文压缩。LLM 只负责"认这次成/败",数到没数到 2 由本脚本说了算。
+# 确定性来自这个计数文件本身——它扛得住上下文压缩。LLM 只负责“认这次成/败”，是否达到 3 次阈值由本脚本说了算。
 # 计数文件放 C:\Temp(躲 Ldterm 监控盘,避免被透明加密)。
 #
 # 自愈(2026-06-17):计数文件第 2 行存本轮 CLAUDE_CODE_SESSION_ID。
@@ -10,7 +10,7 @@
 param(
   [ValidateSet('reset','fail','status')]
   [string]$Mode = 'status',
-  [int]$Threshold = 2
+  [int]$Threshold = 3
 )
 
 $dir  = 'C:\Temp\today-autopilot'
@@ -61,7 +61,8 @@ switch ($Mode) {
       exit 2
     }
     else {
-      Write-Output "[autopilot] ⚠️ 连续失败 $n/$Threshold(再失败 1 次即转人工审)"
+      $remaining = $Threshold - $n
+      Write-Output "[autopilot] ⚠️ 连续失败 $n/$Threshold(再失败 $remaining 次即转人工审)"
       exit 0
     }
   }

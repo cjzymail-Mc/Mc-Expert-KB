@@ -19,4 +19,7 @@ __pycache__/
 # 过程 scratch（Stage 任务流水，非知识）
 todays-task.md
 
+# 部署/备份快照（如 *.bak-before-*，一次性副产物非知识，不进历史）
+*.bak*
+
 # 保留：.claude/agents/（mc-expert 定义）、.claude/skills/（全局 skill 库，经 junction 供多账号）、.claude/commands/（含 /pin、/KB-update）、.claude/hooks/（stopfailure-autocontinue.ps1 / capture_launcher.py 等 junction 母本 + backlog）、principles/reflexes/repo-map/MEMORY.md、decisions/、references/、CLAUDE.md

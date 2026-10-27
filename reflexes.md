@@ -13,6 +13,7 @@
 - **COM 仍保留的窄场景**：视觉渲染 / 导 PNG / 复杂染色 / 必须 COM 的产物；以及**条件性回退**——若又回到 DLP 机器，恢复旧铁律（COM-only + `88 7D 1C` STOP + 写后核明文）。
 - python 写出二进制后核验首字节是明文 magic（`%PDF`/`PK`/`PNG`）；纯文本豁免。〔Agent-3，仍有效〕
 - 〔历史〕**源 repo（3rd-ppt / Agent-3 / Agent-4）满地的 COM-only、`88 7D 1C` STOP 记忆都写于 Ldterm DLP 机器，属环境特定，不是新机器上的普适反射**——读源 repo 记忆时按此折算。
+- **〔元规则〕反射前提 = 产物/脚本最终落地执行的那台机器，不是此刻开发/咨询的这台**：本节「默认 Python」以脚本实际执行、产物最终交付的机器环境为前提。为别的机器开发可分发产物/skill（如开发机明文、目标机加密）时，路线按**目标机**实际加密状态折算——目标机加密 = 命中上面「条件性回退」，别拿开发机明文判「默认 Python」。〔Agent-3 Info Classifier 2026-08-14 双环境生产证伪：本机明文、面向同事的 skill 跑在加密机，用户纠正「绝对表述必须附前提」；分支细节项目专属、留源 repo AGENTS.md §3.1〕
 
 ## 动手前
 
@@ -25,21 +26,30 @@
 - **先查再下结论**：谈某 Claude Code flag/env/功能**存不存在**时，先 `claude --help` + WebSearch 官方文档核实，再下结论。知识截止日后的功能"我没听过" ≠ "它不存在"，别用过时知识判"幻觉"。反向同样成立：**功能真实 ≠ 能扛硬流程**——存在性和可靠性是两件事，都要分别求证。〔Mc-emoji，2026-06-01：曾两轮误判 Agent Teams 为幻觉〕
   - **泛化到一切事实性断言**（不止 CC 功能）：某文件是不是 junction / 某字段是否一致 / 某值是否笔误——先读文件/跑工具/等实证再断言，**不把「理论上应该」当已确认**。抽象规则不 fire，改绑**可见动作扳机**（命中即停先取证）：① 要输出事实论断 → 先读/搜/跑（**含交付宣称**：正要说『能用 / 双击即用 / 搞定了』但没在目标环境实测过 → 停，先实测一遍再宣称。〔Mc-emoji feature-05，2026-07-03 两 bat 未测就宣称"双击即用"被拉回〕）；② 要引 spec/规格/契约判据 → 回读原文那段、不凭印象；③ 要输出阴性结论 → 先做阳性对照（见下条）；④ **自己正要写「理论上应该/应该是/大概率/我记得/按理说」= 未核实信号词，写到它就停**。〔Mc-emoji feature-05，2026-07-01 同会话违反两次后拍板〕
 - **阴性结论需阳性对照**：做「有没有发生 X」的检测时（无泄漏/无 bug/没复现），阴性结果**只有先证明探针本身能检出阳性后才作数**，否则很可能是探针失灵的假阴性。下「没问题」前自问「若这事真发生了，我的探针检得出来吗？」——没把握先喂一个已知阳性样本验探针灵敏度。〔Mc-emoji feature-05，2026-06-29：记事本探针测「按键泄漏」多轮显示零泄漏，补阳性对照才发现记事本根本收不到注入键、之前全是假阴性〕
+- **判 done_when / 验收项达标前：按字面判据跑阳性对照（构造负例真跑）**：自己正要写「D# / 验收项 X 达标 / PASS」这个签注 = **停**，先做两件事：① **标尺核对**——把该 done_when 的**字面原文判据**拎出来（不取验收报告的二手结论、不取印象）；② **阳性对照**——按这条字面判据构造一个**会触发失败**的输入，**真跑一次**，看到它真的失败（exit≠0 / 报错 / BLOCKED）。没跑过阳性对照 → 禁止判达标，只能标「**仅静态推断、待动态复跑**」。字面判据含「可靠失败 / 失败时 X / 缺 Y 时中止」这类 → **必须构造「缺 Y」的负例真跑**、看到它真中止；只静态读到「源码里有 abort 路径」不算。**与上一条互补不重**：上一条管「探针失灵→假阴性」（探针本身能不能检出阳性）；本条管「标尺用错 + 没跑负例→假 PASS」（拿二手结论当标尺、把静态推断当动态验证），两者常同场景叠加触发。〔Mc-emoji double-workflow 首次验收，2026-08-05：Claude 静态看 anchor 段有 abort 判 D3「缺槽位可靠失败」达标，codex 侧独立复跑构造缺槽位负例才抓出 `build_pptx.py` 缺槽位只记 ok=False 仍 save+exit 0 的假 PASS；mc-expert 陪审高置信 GO。**单 repo 起源，待第二 repo 命中升正反射**——但「签验收项前按字面判据跑负例」是与上一条同族的跨 repo 判断纪律，故先入〕
+- **判 done / 定验收范围前：范围禁缩窄成已过子集、验收指标禁替换成可自证代理**：planner/评审者（Claude 或 Codex）正要 ①把冻结 done_when / 验收门控换成更窄的代用判据（「入口能调通」代「fresh session 真能发现」）、②把效果类验收换成过程/结构类程序门 PASS（YAML 一致性 / 结构核对代最终效果验收）、③负例只测已通过的路径就宣称覆盖 = **停**。正解：标尺 = 冻结 done_when / 验收基准**全集**逐条钉门，每条终态 PASS（本 run 独立证据）/ 仅静态推断（禁冒充 PASS）/ FAIL / BLOCKED——**没有「默认 PASS 的可选项」**，未过即 BLOCKED 并写死进 REWORK；两段门必须两段都验（机器可证部分 PASS ≠ 整门 PASS）；用户纠正范围问题 ≥1 次 = 范围缩窄信号，先逐条重列全集对齐再判 done。**与上条姊妹正交**：上条管「单条判据跑负例」（标尺=单条字面），本条管「验收范围/指标全集被收窄或替换」（标尺=冻结全集），常同场景叠加但动作主体不同。最典型症状 = **「多个程序 PASS 制造接近完成的错误信号」**。〔Mc-emoji feature-08 pptx 安装（origin 2026-08-05）+ feature-09 docx 复发；Agent-3 KJX2026021 goal-replacement 重大事故（事故 2026-08-13、复盘档 08-14，跨 repo）；fangcaixia detail-auto review1 负例子集化 2026-09-08——2026-09-18 收割，前置双轴经用户裁决 a 认定满足（裁决与陪审记录 = MEMORY.md 09-18 收割轮；完整命中账本 = KB inbox proposal-planner-acceptance-scope-no-narrowing.md destination_target）〕
+- **「要不要重构这工具？」→ 先问治标能不能解眼前痛**：用户因被某工具行为打扰（弹窗/卡顿/报错）而问「是不是该重构 / 删守卫 / 换机制」时 = **停**。先回「治标能不能解眼前痛」——只有两种情况才进架构评估：① 治标**试过还失败**；② 用户**明确**「我要重构不是治标」。**「别打扰我」是症状诉求，不是拆安全网的授权**——用户问要不要重构是求助判断、不是发授权。实例：2026-07-20 B 模式被「读 `~/.claude-glm` 触发弹窗」打扰、问「该不该删 delete guard 走 auto」→ 治标=把 skills 加进 `additionalDirectories`（官网明列，15min 低风险）即解；架构方案（删 guard / 移 ask / auto 接管）mc-expert 陪审判不该做。与上面「断言前核实/扫描类词先对齐」同簇（绑可见动作扳机），但触发词独特=**用户主动问要不要重构**（非我自发想重构、也非扫描类词）。边界：治标 ≠ 砍料/含糊，该给的候选/默认/赌注照给全，只是换讲法不动架构层。〔Mc-emoji 单 repo 起源，2026-07-20；待第二 repo 命中升正反射——但「用户被打扰→问要不要重构」是跨 repo 普适交互模式〕
 
 ## 控制与失败
 
-- **连续失败 2 次熔断**：单文件硬超时 20-30s，连续 2 次超时切「本机 .ps1 模式」；不在 sleep 循环里盲目重试。〔3rd-ppt〕
+- **任务/方案第 3 次连续失败熔断**：同一稳定 `failure_key` 的前两次失败用于取证、陪审与切换尚未尝试的可行路线；第 3 次失败后停机交人工。换建议、agent 或 session 不重置计数。（姊妹轴：失败轴之外另有信号轴——无新外部信号的迭代空转熔断，见 [[references/loops-and-automation]] §8。）〔Wu Prj，2026-09-04 用户拍板〕
+- **COM 单文件连续超时 2 次即 CUTOVER（基础设施例外）**：单文件硬超时 20-30s，连续 2 次超时切「本机 .ps1 模式」；这是 Office 互操作运输层保护，不占用也不放宽上面的任务/方案 3 次预算，不在 sleep 循环里盲目重试。〔3rd-ppt〕
 - **不直接编辑生成产物**：项目档案 md / metadata.yaml / output 都是 workflow 产物，缺字段**修 prompt+脚本**不修产物。〔3rd-ppt + Agent-3〕
 - **fix-plan 执行后回填头部**：执行完 `fix-*.md` 立刻改头部 quote 块：状态→已执行 + 列交付物 + 列与原 plan 实战偏差；主体保留凝固态档案。〔Agent-3〕
 
 ## 交互
 
-- **Checkpoint 走 Excel 不渲染 md 表**：mapping 决议 / 槽位对照 / 字段映射这类逐行签字场景必须 `start "" *.xlsx`；对话里只摘要 + 点特殊项，禁列全表（终端表格无下拉/筛选/留痕，滚屏即失）。〔Agent-3〕
+- **Checkpoint 走 Excel 不渲染 md 表**：mapping 决议 / 槽位对照 / 字段映射这类逐行签字场景必须 `start "" *.xlsx`；对话里只摘要 + 点特殊项，禁列全表（终端表格无下拉/筛选/留痕，滚屏即失）。**适用边界（2026-09-18 补，维护性订正）**：本反射管签字的**载体格式**、不管签字门的**存在性**——外部真相机器可读（人工修订件逐格文本 / golden 答案）时走**确定性 diff 脚本**判对错，不设人眼逐格签字门（确定性 diff 已可判对错时，人眼签字 = 纯摩擦门，违 [[principles]] 人工门最小化）；人眼只留**残差例外格一次性裁决 + 最终视觉验收**。〔Agent-3；边界补注源 = 2026-08-17 用户裁决：人工修订 pptx 每格 = 标准答案，正确工作是按它建映射、不是让用户人眼比对 100 格。操作化细则（golden-answer 驱动验收 + 防背答案三铁律）见 [[decisions/acceptance-guardrails]]——双向互链，别只改一侧〕
 
 ## 环境/工具
 
 - **PowerShell 含 `[]` 路径必须 `-LiteralPath`**：本项目所有 feature 在 `[featureNN-...]` 下，FS cmdlet 默认加 `-LiteralPath`，否则 `[]` 被当通配符报错。〔Agent-3 + 本次实测复现〕
+- **Glob/Grep pattern 里 `[` 是字符类语法**：带方括号的目录/文件名（如 `[feature-06-codex-workshop]`）直接写进 Glob/Grep 的 pattern（如 `[feature-06-codex-workshop]/output/**`）→ `[` 被当字符类、**静默返回空**（No files found，不报错）→ 极易误判"文件不存在 / dead code / 无调用方"。绕开：用更宽 glob（`feature-06-*/output/**`）或 ripgrep `--glob` 字面匹配；shell 里 `[[]` 转义易错别用。**与上一条 `-LiteralPath` 是兄弟**：方括号在 PowerShell 路径参数（FS cmdlet，漏了报错）和 Glob/Grep pattern（静默返空）里都是特殊语法，两处都要防——后者更阴，返空不报错易喂假阴性（同 Grep 默认跳 hidden 的工具盲区）。〔Mc-emoji，2026-07-13：重犯"无数次"，reflect 续30 签字 #1〕
+- **深路径 python IO ENOENT 先数路径长度（>260 = MAX_PATH）**：嵌套 run/rc 目录（run_id 32 + rc hash 44 字符）+ 中文项目名天然把路径推过 Windows 260 上限；**诊断签名 = shell 能看见、venv python `open()` 报 ENOENT**（pwsh7/Git Bash 是 long-path-aware，venv python 的 CRT IO 默认不是）——先数长度，别先查权限/编码/斜杠方向。绕行 = 拷短路径 staging 跑完再拷回（实测 305→102 字符）；`\\?\` 前缀与 `rglob()` 兼容差（实测超时挂死）别再试。与上面 `-LiteralPath` / `Glob[` 同属「路径写法坑」族：那两条管通配符、本条管**长度**。〔Agent-3 memory + fangcaixia 生产 run-log——同一事故（2026-08-17 KJX2026021）的双 repo 档案，非两个独立命中，诚实标注〕
 - **改 settings/配置先 .bak**；权限用方案 A，不主动开 bypassPermissions。〔Mc-emoji〕
 - **Git Bash 里 `python3` 是 WindowsApps stub，exit 49 静默失败**（不报错、无输出）——跑脚本/校验一律用 `python`；原生 python 不认 `/tmp`，临时文件走 Windows 路径（`tempfile.gettempdir()`）。〔Agent-4〕
+- **user-scope junction 路径是跨 repo 共享契约**：`~/.claude/` 下 commands/skills/agents 的脚本经 junction 给所有源 repo/账号共享（`$env:USERPROFILE\.claude\...` 借同一份物理文件，一处改处处见效——红利与代价同源）；**改其位置 / 删 / 改名前，grep 必须含所有源 repo**（不只扫当前 repo 或母本 repo），否则漏掉借用者、挪了断跨 repo 调用。〔Mc-emoji feature-06 plan05，2026-07-12：autopilot_failcount.ps1 被 Wu Prj sub-plan-16 跨 repo 硬编码调用，险当 today 私有挪走，幸 mc-expert 跨 repo 扫到〕
+- **判「是不是 junction」Python 必须 `lstat()`，Glob 拿 junction 当 path 实测静默返空**：`stat()` / `os.walk` 会**穿透 reparse point**，把 junction 判成实体目录 → 产出「不是链接、是双份拷贝需同步」的**假阴性**（两侧 hash 相同不是同步过，是同一个物理文件）；Glob 工具以 junction 路径为 path 实测返空不报错（同底层 Grep 未单测，按同族防范）。正解：判链接用 `os.lstat()` 或 `Get-ChildItem <dir> -Force | select LinkType,Target`（junction 常挂**子项**一级，根目录 LinkType 空≠没有）；跨 junction 找文件直接指定真源路径。**与上条 junction 契约是姊妹**：那条管「改前扫引用」、本条管「判存在性」，同下条 Glob-跳-hidden 一样属「工具盲区骗你」族。〔Mc-Expert-repo 2026-08-19（用户多次纠正「双侧同步」误判）+ Hot-Fix 2026-10-21（mc-expert stat() 假阴性亲踩、Glob 返空同会话实测）——同族误判双 repo，检测语义为本次新沉淀〕
+- **Grep 工具默认跳 hidden 目录**：ripgrep（Grep 工具底层）默认跳过 `.` 开头目录（`.claude/`·`.agents/`·`.codex/`·`auto-memory/`）**且**尊重 `.gitignore`——两者叠加 = 全 repo grep 时这些配置/契约目录被完全跳过。下「无引用 / 无调用方 / 没人用」这类**阴性结论前**，必须显式指定 path（`.agents/skills` 等）或 Bash `rg --hidden`（`--no-ignore` 只绕 `.gitignore`、**不绕 hidden 跳过**；Grep 工具未暴露 `--hidden`）。**即使你想核实，工具盲区也会骗你**——这是「先查再下结论 / 阳性对照」的工具层补丁。〔Mc-emoji feature-06 plan06，2026-07-12：两次同型翻车（adapter 引用 / failcount 死代码 险误判）〕
 
 相关：偏好底座 [[principles]]；架构决策 [[decisions/orchestrator-route]] / [[decisions/acceptance-guardrails]]

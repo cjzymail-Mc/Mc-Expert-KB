@@ -1,0 +1,7 @@
+interface:
+  display_name: "Temp Command"
+  short_description: "安全消费 repo 根 temp.md，并将阶段进展交给下一会话"
+  default_prompt: "Use $temp-command to consume the repository temp.md handoff and write back your progress."
+
+policy:
+  allow_implicit_invocation: false

@@ -16,10 +16,11 @@ try {
   $p = $full.ToLowerInvariant()
 
   # 保护清单（已小写；-like 中 \ 与 . 均为字面量，* 为通配）
+  # 2026-07-07 通用化：原硬编码 yk 路径 → *\.claude*\... 覆盖 mc/xh/glm 各账号 + KB repo 源
   $protected = @(
-    '*\.claude\settings*.json',              # 项目级 + user 级 settings
-    'c:\users\xy198\.claude\hooks\*.ps1',    # 守卫/续跑等 hook 脚本
-    'c:\users\xy198\.claude\hooks\*.py',
+    '*\.claude*\settings*.json',             # 所有 .claude* 的 user 级 + 项目级 + KB repo 源 settings
+    '*\.claude*\hooks\*.ps1',                # 所有 .claude* hooks 脚本入口 + KB repo 源
+    '*\.claude*\hooks\*.py',
     '*.bak*'                                 # 任何 .bak 备份
   )
 

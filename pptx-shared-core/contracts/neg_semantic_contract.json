@@ -1,0 +1,9 @@
+{
+  "expected_slide_count": 2,
+  "required_anchors": ["Hello World"],
+  "forbid_duplicate_picture_coords": true,
+  "check_rels_residue": true,
+  "slots": [
+    {"slide": 1, "shape": "Title 1", "kind": "text", "expected": "Hello World"}
+  ]
+}

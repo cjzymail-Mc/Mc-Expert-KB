@@ -1,6 +1,6 @@
 ---
 name: ldterm-decrypt-images
-description: 通过 mspaint 白名单进程绕过 Ldterm 加密，把客户/同事用 Ldterm 加密发来的图片（PDF 截图 / 工艺图 / PPT 嵌入图）批量解密为标准 JPEG。任何 Windows Office 项目里遇到「图片打开是花屏」「Python 读图报错 / 像素错乱」「Office 能看但 Python / Pillow 读不到」时优先用这个。
+description: 通过 mspaint 白名单进程绕过 Ldterm 加密，把客户/同事用 Ldterm 加密发来的图片（PDF 截图 / 工艺图 / PPT 嵌入图）批量解密为标准 JPEG。任何 Windows Office 项目里遇到「图片打开是花屏」「Python 读图报错 / 像素错乱」「Office 能看但 Python / Pillow 读不到」时优先用这个。【生产机件：本机=实验环境无加密（2026-09-11），该场景休眠勿触发；进入带 Ldterm 的生产环境时恢复现役】
 ---
 
 # ldterm-decrypt-images
