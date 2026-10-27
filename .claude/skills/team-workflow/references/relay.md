@@ -42,19 +42,36 @@ ID 全局唯一，清单覆盖指定基线完整要求。保留项、例外、�
 
 ## 2. B 的交接输入
 
-完成本轮原有 team-task 的验收、收尾及所有 teammate shutdown 后，写 handoff-input.json：
+沿用原进度骨架，不在收尾重建一份删减版。正常完成的头部格式如下（仅结构示意，尖括号替换为本轮实际值；不是初始化模板）：
+
+```text
+> run_id: <state.team_run，非 workflow run>
+> source_block_id: <state.source_id>
+> contract_id: <本轮基础合同的 ctr-ID>
+> effective_contract_id: <当前合同链末端 ID；无增补时等于 contract_id>
+> run_status: COMPLETE
+> 漏斗: P0✓ P0.5✓ P1✓ P2✓ P3✓ P4✓ P5✓ P6✓
+```
+
+保留全部既有进度、风险登记和复盘段落；五个英文头字段各只出现一次，保持小写键、ASCII 冒号，唯一 `> 漏斗:` 行反映实际阶段。执行与收尾期间仍为 `ACTIVE + P6·`，不能为了交接提前勾选。
+
+定稿顺序：**完成真实工作、规定终审、收尾及 teammate shutdown → 同次落盘 COMPLETE 与唯一 P6✓ 并核对完整头字段/合同链 → 写 summary、非空 evidence 与全量 failure_counts → 最后实算 artifacts 哈希 → finish**。完成前先确认全部执行体已静止；终审后若改动受审产物，须按原终审规则重审。阻断/熔断不套成功头部，按下文保留真实状态。
+
+随后写 handoff-input.json。下面 JSON 仅示意结构：路径、摘要、哈希及累计失败字典都要替换为本轮实值，不可原样提交。
 
 ```json
 {
   "outcome":"complete",
-  "summary":"本轮实际完成内容及尚存事项",
+  "summary":"本轮新增/重验：实际内容；有效旧证据：原时间、范围及本轮适用性；未解项：缺陷/后续阶段/外部阻断（无则明确无）",
   "artifacts":{"output/result.txt":"真实文件的完整64位sha256"},
   "evidence":["team-progress/team-workflow/<run>/round-01/execution-check.txt"],
   "failure_counts":{}
 }
 ```
 
-`artifacts` 必须覆盖本轮实际交付件及会影响验收的脚本/数据，不用“报告说已通过”代替产物。普通成功至少一件；hash 用 Python/hashlib 等实算。证据路径须为已存在、非空的原始验证记录。helper 检查源块、run/source ID、合同增补链、effective_contract_id 和当前漏斗行 `COMPLETE + P6✓` 后，绑定交接 hash。
+`artifacts` 必须覆盖本轮实际交付件及会影响验收的脚本/数据，不用“报告说已通过”代替产物。普通成功至少一件；hash 用 Python/hashlib 等实算。`evidence` 必须为非空列表，每条指向 repo 内已存在、非空的原始验证记录，使用本轮实际路径；沿用证据时同时给本轮适用性核对记录。`failure_counts:{}` 仅适用于确无任何累计失败的情况，否则完整承接原 key 和次数。helper 检查源块、run/source ID、合同增补链、effective_contract_id 和当前漏斗行 `COMPLETE + P6✓` 后，绑定交接 hash。哈希生成后不再改被引用文件；如有必要补正，须重新实算受影响引用。
+
+`EVIDENCE_REQUIRED` → 补真实非空证据列表；`TEAM_PROGRESS_INVALID` → 按原合同补正头字段/有效链；`TEAM_P6_NOT_COMPLETE` → 核实真实工作和收尾是否完成，再修正状态及唯一漏斗行，未完成则继续工作或如实交接阻断。先 `status` 确认仍是本轮 B_RUNNING，且没有已落盘的本轮 execution 归档或 handoff，才能补正输入、更新哈希并重试 finish；沿用失败预算，不靠盲重试过门。已出现归档/交接、状态不符或身份/源块/合同漂移时保留现场，按原错误/暂停规则处理，不覆盖旧证据、不手改 state。
 
 遇真实人工门或熔断，用 `outcome=blocked|halted`、progress 写 `WAIT_HUMAN|HALTED|BLOCKED + P6·`，带原始阻断证据；不能先伪造 COMPLETE 再交 A。A 收到这种交接只能 pause，不能把它自动换包装成下一轮以绕门。
 
@@ -62,18 +79,18 @@ ID 全局唯一，清单覆盖指定基线完整要求。保留项、例外、�
 
 ## 3. A 的验收输入
 
-每条均在本轮直接核验，再写 review-input.json：
+每轮重读冻结基线、全量覆盖判据，再写 review-input.json。本轮新增/重验、有效旧证据的原时间与范围、未解项可直接写在现有 summary 和 acceptance 记录中，不新增报告字段：
 
 ```json
 {
   "decision":"rework",
-  "summary":"D1 尚未满足，下一轮只补这个缺口",
+  "summary":"本轮新增/重验：D1 实物核查；有效旧证据：无；未解项：D1 的具体缺口及下一轮范围",
   "failure_counts":{"review|content|missing_field|D1":1},
   "checks":[{"id":"D1","status":"FAIL","evidence":["team-progress/team-workflow/<run>/round-01/acceptance/D1.txt"]}]
 }
 ```
 
-`decision=pass|rework|pause`；checks **必须恰好覆盖所有 criteria ID**。EXEMPT 除 evidence 外还必须有 `clause` 原始豁免条款。PASS_DYNAMIC 证据必须是 A 本轮实际核验所得，不是 B 的自述或旧 reviewer 的结论。脚本能检查“有证据且未变化”，语义独立性由 A 依判据落实。
+`decision=pass|rework|pause`；checks **必须恰好覆盖所有 criteria ID**。EXEMPT 除 evidence 外还必须有 `clause` 原始豁免条款。PASS_DYNAMIC 必须有 A 本轮独立核验记录，不能只用 B 自述或旧 reviewer 结论；相关依赖/产物 hash 未变、原范围及当前环境适用且无未解差异时，可引用既有独立原始证据并附本轮适用性核对记录，不把引用写成本轮重跑。身份、当前页面、终局 DOM 当次验证及合同规定的 fresh 终审不可抵扣。脚本能检查“有证据且未变化”，语义独立性由 A 依判据落实。
 
 rework 只有在未达 max_round 且未触发人工门/同 key 三次失败时才递增；全通过则提前 DONE。达到轮次上限是 LIMIT，**不是 COMPLETE/PASS**。暂停列出需要用户处理的具体条件；时间到、低置信或普通默认选择本身不构成人工门。
 
@@ -82,5 +99,12 @@ rework 只有在未达 max_round 且未触发人工门/同 key 三次失败时�
 每次完成通知前先确认对应的后台 task_id；随后 status。B_READY 才可首次 enter；B_RUNNING 只能通过用户显式 resume 的单次 token 恢复原 team_run。permit 不创建任务、不复位进度。PUBLISHING 表示源已冻结但根文件可能只更新了一份，首轮 B/后续 A 重放 publish 会核对旧/新 hash 后完成剩余写入；禁止另写计划压过去。A 未上线时 finish 仍持久化 A_REVIEW；B 续等，A 加入后直接验收。无需为晚加入新增消息队列或另一套状态机。
 
 Windows 事件采用 double-session 的 AutoResetEvent + repo mutex 思路，代码自足，不要求启动 double-workflow。事件只是提示；真正交接条件都在 state。关掉窗口、电脑休眠/退出登录、工具被禁用会中断唤醒；本版不提供独立于 Claude 窗口的后台服务。
+
+异常等待沿用原入口处理，不新增监控或轮询：
+
+- `TIMEOUT`、重复通知和 `WAITER_ALREADY_RUNNING` 按 SKILL 正文处理。
+- killed/异常退出通知到达后，先 status，记录原 task_id、通知所述错误类型和 run/round/phase；只把低内存等原因归于通知陈述，不推断未经遥测的具体宿主故障。若通知要求等请求再启动，遵守该停止指令，不立即无限重挂。
+- 收到明确重挂/resume 请求，或上下文恢复进入原入口时，先 status 核对绑定 session、角色、run、round 和 phase，再结合原 task_id 的完成通知或后台任务状态确认 waiter。status 本身不证明 waiter 存活；仍在则沿用，确已消失且宿主允许重挂、当前仍需等待时才恢复唯一 3600 秒后台 wait；状态不明不创建第二个，已轮到本窗口则按调度表接棒。
+- 宿主已退出或无可处理通知时，由下次入口恢复，不声称后台持续运行；配额等待与业务缺陷分开记录。不能改为定时轮询、自动杀进程、常驻监控或无限重试。非终态孤儿仍交当次获授权的外部维护，不内建通用接管/恢复机制。
 
 依据：Claude 官方 [Bash 工具参考](https://code.claude.com/docs/en/tools-reference) 与 [后台任务](https://code.claude.com/docs/en/interactive-mode)。交互 session 的后台任务可在主 turn 结束后继续运行并通知原会话；`-p` 的进程结束会终止会话内后台任务。技能变量见 [skills 文档](https://code.claude.com/docs/en/skills)。本机检查版本为 2.1.266；不要把文档支持误写成已通过真实 Claude-GLM 两窗口验收。

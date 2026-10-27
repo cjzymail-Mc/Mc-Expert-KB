@@ -23,8 +23,8 @@ argument-hint: "run=<workflow-run> round=<N> [resume_token=<token>]"
 
 4. 按现行 team-task 完整执行 P0.5-P6，包括 chop-task、冻结合同/增补、生产 skill、失败陪审、fresh ENHANCED_FINAL 和收尾。B 及其本轮 reviewer 的 REQUIREMENTS 来自当前 task source + 生效合同，验本轮 done_when；不代 A 判全局基线。不得改 source、降低判据或自加下一轮。每个检查点及最终冻结前先 `status`：若 stop_requested，停止新增工作，完成在途写入并关闭团队，留可恢复 progress 后 `pause --reason ...` 返回；不硬杀进程。
 
-5. 达标后正常跑 team-task 的 mc-update→pin→session-new 预判/收尾；这些内部记忆/交接动作不负责跨窗口消息。session-new 沿母本仅固化文件，不真的清空、关闭或重开 B。收尾完成再原子写 `COMPLETE + P6✓`，shutdown 所有 teammate / Clean up the team，确保没有仍在写产物的执行体。
+5. 达标后先 shutdown 所有 teammate / Clean up the team，再按 team-task 正常跑 mc-update→pin→session-new 预判/收尾；这些内部记忆/交接动作不负责跨窗口消息。session-new 沿母本仅固化文件，不真的清空、关闭或重开 B。收尾完成且确认没有仍在写产物的执行体后，才原子写 `COMPLETE + P6✓`。
 
-6. 按 [../team-workflow/references/relay.md](../team-workflow/references/relay.md) §2 写 handoff-input.json，执行 `finish`。正常完成必须绑定真实产物/证据 hash；阻断写 blocked/halted 和真实 WAIT_HUMAN/HALTED，不能伪装成功。脚本失败则保留现场、静止后 `pause --reason <错误>`，只报告一次，不自己修改 state 续命。
+6. 按 [../team-workflow/references/relay.md](../team-workflow/references/relay.md) §2 的定稿顺序写 handoff-input.json，再执行 `finish`；保留完整 progress 头字段与唯一漏斗行，先定稿、后实算引用 hash。正常完成绑定真实产物及非空证据列表，承接全量 failure_counts；阻断写 blocked/halted 和真实 WAIT_HUMAN/HALTED，不能伪装成功。仅输入遗漏且仍为本轮 B_RUNNING、尚无 execution 归档和 handoff 时，按 §2 补正并更新受影响引用后重试；其余脚本失败保留现场，静止后按原规则 `pause --reason <错误>`，只报告一次，不改 state、旧归档或失败计数来续命。
 
 7. `finish` 已负责归档、提交 A_REVIEW 与事件通知；A 尚未加入时同样提交，结果留盘供它晚到验收。返回 team-workflow 主调度器，再根据最新状态挂一小时后台 wait。不直接编辑 A 的验收报告，不对 A 发送“你应当判 PASS”等结论，不自动重跑本轮，不再开自己的循环。
