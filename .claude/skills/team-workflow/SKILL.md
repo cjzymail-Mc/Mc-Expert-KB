@@ -37,7 +37,10 @@ argument-hint: "run [<需求文档>] | review <冻结文档> [max-round=3] | sta
 
 首次使用读 [references/relay.md](references/relay.md) 的命令和 JSON 格式。`run`、`review`、`resume` 都在**本窗口主会话**执行，不能 fork 成 subagent。
 
-- `run [<需求文档>]`：可选一个需求文档路径。**无参数**时行为不变：要求 team-task.md 已备好，B 完整读现有 team-task、repo 硬规则和本轮执行必要的资料/生产 skill；不重写或自行扩展任务，不额外追读 A 的用户需求文档。**带参数**时：`.team-workflow-state.json` 已存在 → 不起草，转 status/resume；team-task.md 缺失或空白（strip 后无可见字符）→ 完整读取该文档（文档缺失/为空则报错停止，不猜任务），把首轮可执行范围起草成自足任务并**自动创建**写入根 team-task.md——「本次任务 + done_when」，写清范围/保留项/验证方法，不照抄全文、不带 source 标记、不写轮数或 criteria——随后把三要素回显在会话内再继续；team-task.md 非空（无论成形与否，含 source 标记异常形态）→ 一律不覆盖不沿用，报告现内容形态并停止，请用户二选一：清理 team-task.md 后重跑带参命令重新起草，或去掉参数沿用现有任务。唯一例外：非空内容就是**本会话刚起草写入、init 尚未成功**的同一份草稿（如 init 瞬时失败后重试），直接重试 init 或去掉参数沿用即可，不必清理。起草读取仅此一次：B 不据此冻结文档 hash、不生成 criteria、不决定总轮数。两种方式随后一致：执行 `init`（不传 baseline/max-round）。helper 核对旧 progress 已收口或为空，备份原始任务与旧 progress，给现成任务仅加 source 标记、保留正文，清空已归档旧进度，直接进入 B_READY。此时 state 尚无 baseline，max_round=null 表示**等 A 绑定、仅限首轮**，不是无限轮次。无须等 A 或全局 criteria；没有基线文件也可开工。任务缺失/旧任务仍执行则拒绝；已有 workflow 时转 status/resume，不覆盖状态。
+- `run [<需求文档>]`：用户明确启动**新任务**时，先按 [新任务自动收尾 §5](references/relay.md#5-新任务启动前自动收尾) 调 `prepare-new`：终态直接归档；无人执行的中断任务保留原始证据后记 CANCELLED 并归档；正在执行或情况不明时报告具体占用。使用本窗口真实 session，不要求用户切回旧窗口或执行 `!` 命令。重复调用当前任务或请求续做走 status/resume，不当作新任务清理。
+  - **无参数**：只接入已准备且未执行的 team-task.md，完整读其正文、repo 硬规则和必要生产 skill；不自行重写或扩展任务，不额外追读 A 的基线。
+  - **带文档参数**：自动收尾成功后，team-task.md 缺失/空白才完整读指定文档并自动起草首轮自足任务（「本次任务 + done_when」、范围/保留项/验证方法，不带 source 标记、不写轮数或 criteria），回显范围后继续。文档缺失/空白则报错。旧归档文件由 helper 核对字节后清空，不交给用户手工删。若留下的是不能证明属于旧归档的非空任务，保留它并集中说明冲突；本会话刚写入而 init 尚未成功的同一草稿直接重试，不重复清理。
+  - 随后 `init`（不传 baseline/max-round）：备份原任务与旧进度，给现成任务加 source 标记、保留正文，清空已归档旧进度并进入 B_READY。state 此时无 baseline、max_round=null，只限首轮；A review 才绑定全局基线、criteria 与轮数。自动收尾不会执行业务、恢复旧任务或解除其人工门。
 - `review <文档> [max-round=N]`：A 先 status，随后**完整读取用户在此命令指定的基线及其依赖**，提取全局 criteria（原文定位、验收方法、保留项、例外边界、模板标注要求），写 criteria-input.json。执行 `join --run ... --baseline <绝对路径> --max-round N --criteria ...`，才冻结基线 hash、轮数和清单并绑定 A。加入不改 B 的 source、progress、合同或当前阶段；B 正在做则静默等待，B 已完成则立即验收交接。已绑定 A 重入须核对参数与原绑定一致，不能换基线、加轮数或重新冻结清单。没有 workflow 则提示先在 B 启动 run；若已 PAUSED/终态，只报告结果，不重开。
 - 每次完成通知/角色工作返回后，先 `status`，核对本窗口 ID、run、round、phase；**通知是提醒，盘上状态才决定轮到谁**。旧通知、重复通知不构成执行许可。
 
@@ -88,7 +91,7 @@ python "<skill-dir>/scripts/workflow.py" wait --repo "<repo>" --session "<本窗
 - `/team-workflow status`：只读当前状态，简报角色、轮数、谁在工作及阻断，不启动循环。A 未加入时标“首轮 / 总轮数待 A 设定”，不要把 null 显示为无限执行。
 - `/team-workflow stop`：原 A/B 调 helper `stop`。若 B 正在执行，只设停止请求；B 在下一个检查点停止新增工作，完成在途写入和团队关闭后 `pause --reason ...` 确认静止。**不杀 Office/其他窗口进程**。停止不等于验收通过。
 - `/team-workflow resume`：只恢复绑定的原 session。按表格继续本窗口回合；首轮 PUBLISHING 由 B 重放 publish。等待方重挂 wait（原 waiter 尚在则沿用）。B 若 B_RUNNING，用户此次显式 resume 先走 helper `resume --reason <用户原话>`，再传返回的单次 resume_token 调内部 runner，复用同一 team_run/source/合同/失败计数，不再跑一个新任务。
-- PAUSED 是人工门，不能靠 resume 静默清除；DONE/LIMIT/CANCELLED 不自动重开。确需全新 workflow 时，用户明确启动新任务后，原窗口先 `archive`（仅终态可用），准备新的未执行任务，再由 B run；归档后根 team-task.md 仍残留末轮任务，`run <文档>` 仅在其缺失/空白时自动起草，重开前须先清理。本版没有换窗口接管、租约、自动解除熔断或旧版状态迁移。
+- PAUSED 是人工门，resume 不静默清除；DONE/LIMIT/CANCELLED 不自动重开。明确的新任务通过 `prepare-new` 收尾旧 run 后正常 init，细则见 §5；同一基线的 PAUSED/LIMIT/熔断不能借此换 run 解除。自动归档不等于旧任务完成，不转移 A/B 绑定，不恢复旧业务执行，不迁移旧版状态。原窗口的 `archive` 保留兼容。
 - helper 检出基线/源块/产物漂移、归档冲突等错误时，停止依赖动作并报一次；轮到本窗口且执行体已静止时可 `pause --reason <原始错误>` 留状态。不要手工改 `.team-workflow-state.json`、删状态、重置计数来续跑。
 
-当前版本：v0.3 的说明修订（2026-10-27），补派工、交接、证据复用及异常等待指引；helper、状态机、A/B 绑定与人工门不变。保留 `run <需求文档>` 简化启动：仅缺失/空白任务可由 B 代起草。文档检查和局部脚本通过不代表新增指引已在真实双 session 任务中验证。
+当前版本：v0.4（2026-10-28），新增明确新任务前的自动归档/中断退役，保留原绑定 resume、A/B 接力与人工门。终态可由当前调用者收尾，无须冒用旧 session；中断退役须通过真实进程及 waiter 检查。隔离机械测试、实际旧任务清理与真实双 session 接力分别记验证层次，不互相代替。

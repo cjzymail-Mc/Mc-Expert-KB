@@ -187,7 +187,18 @@ def glm_session(repo, session):
                     value = row.get("message", {}).get("model")
                     if value: model = value
             need(model and "glm" in model.lower(), "CLAUDE_GLM_RUNTIME_NOT_PROVEN")
-            return {"runtime": "CLAUDE_GLM", "model": model, "transcript": str(path)}
+            proof = {"runtime": "CLAUDE_GLM", "model": model, "transcript": str(path)}
+            # Minimal process identities let a future orphan cleanup check surviving
+            # descendants even after Claude removes its live-session registry row.
+            processes = []
+            for metadata in (root / "sessions").glob("*.json"):
+                try: row = read_json(metadata)
+                except (OSError, ValueError): continue
+                if row.get("sessionId") != session or Path(row.get("cwd", "")).resolve() != repo: continue
+                if type(row.get("pid")) is int and row["pid"] > 0 and str(row.get("procStart", "")).isdigit():
+                    processes.append({"pid": row["pid"], "procStart": str(row["procStart"])})
+            if processes: proof["processes"] = processes
+            return proof
     raise ValueError("CLAUDE_SESSION_TRANSCRIPT_NOT_FOUND")
 
 
@@ -558,7 +569,14 @@ def wait(repo, session, run, observed, seconds=3600):
     need(type(observed) is int and observed >= 0, "OBSERVED_SEQ_REQUIRED")
     need(run, "EXPECTED_RUN_REQUIRED")
     with locked(repo):
-        s = load(repo); role = bound(s, session, run=run)
+        s = load(repo) if (repo / STATE).exists() else None
+        if s is None or s["run"] != run:
+            s = read_json(local(repo, "team-progress/team-workflow/" + run + "/state-final.json"))
+            need(s.get("repo") == str(repo) and s.get("phase") in TERMINAL, "ARCHIVED_STATE_INVALID")
+            role = bound(s, session, run=run)
+            return {"event": "TEAM_WORKFLOW_WAKE", "run": run, "role": role, "phase": s["phase"],
+                    "round": s["round"], "seq": s["seq"], "archived": True, "elapsed_ms": 0}
+        role = bound(s, session, run=run)
     event = Handle(key(repo, run + "|" + role))
     # One waiter per bound role; duplicate background notifications cannot multiply listeners.
     single = Handle(key(repo, run + "|waiter|" + role), mutex=True)
@@ -569,7 +587,18 @@ def wait(repo, session, run, observed, seconds=3600):
         need(acquired, "WAITER_ALREADY_RUNNING")
         while True:
             with locked(repo):
-                s = load(repo); bound(s, session, role, run)
+                # Terminal cleanup may finish before this listener wakes. Read its
+                # immutable archive, never attach the old waiter to a new run.
+                s = load(repo) if (repo / STATE).exists() else None
+                if s is None or s["run"] != run:
+                    archived = local(repo, "team-progress/team-workflow/" + run + "/state-final.json")
+                    s = read_json(archived)
+                    need(s.get("repo") == str(repo) and s.get("phase") in TERMINAL, "ARCHIVED_STATE_INVALID")
+                    bound(s, session, role, run)
+                    return {"event": "TEAM_WORKFLOW_WAKE", "run": run, "role": role,
+                            "phase": s["phase"], "round": s["round"], "seq": s["seq"], "archived": True,
+                            "elapsed_ms": int((time.monotonic()-start)*1000)}
+                bound(s, session, role, run)
             need(s["seq"] >= observed, "SEQ_REGRESSION")
             publishing = s["phase"] == "PUBLISHING" and role == ("B" if s["round"] == 1 else "A")
             actionable = publishing or (role == "A" and s["phase"] in {"A_PLAN", "A_REVIEW"}) or (role == "B" and s["phase"] == "B_READY")
@@ -586,15 +615,19 @@ def wait(repo, session, run, observed, seconds=3600):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("action", choices=["init", "join", "status", "publish", "enter", "permit", "finish", "review", "wait", "resume", "stop", "archive", "pause"])
+    ap.add_argument("action", choices=["init", "join", "status", "publish", "enter", "permit", "finish", "review", "wait", "resume", "stop", "archive", "pause", "prepare-new"])
     ap.add_argument("--repo", required=True); ap.add_argument("--session", default="")
     ap.add_argument("--run"); ap.add_argument("--baseline"); ap.add_argument("--max-round", type=int)
     ap.add_argument("--task"); ap.add_argument("--criteria"); ap.add_argument("--report")
     ap.add_argument("--round", type=int); ap.add_argument("--observed-seq", type=int); ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--reason"); ap.add_argument("--resume-token")
+    ap.add_argument("--request"); ap.add_argument("--actor", default="")
     a = vars(ap.parse_args()); action = a.pop("action"); repo = a.pop("repo"); session = a.pop("session")
     try:
-        if action == "wait": result = wait(repo, session, a["run"], a["observed_seq"], a["timeout"])
+        if action == "prepare-new":
+            from prepare_new import prepare_new
+            result = prepare_new(repo, session=session, **a)
+        elif action == "wait": result = wait(repo, session, a["run"], a["observed_seq"], a["timeout"])
         else: result = operation(repo, action, session, **a)
         print(json.dumps(result, ensure_ascii=False))
         return 0

@@ -2,7 +2,7 @@
 
 按需阅读：首轮准备/A 加入用 §1，B 交接用 §2，A 验收用 §3；恢复/排错用 §4。脚本只核验机械状态与证据绑定，**不判断业务要求是否真的达标**。
 
-所有命令前缀：`python "<team-workflow skill-dir>/scripts/workflow.py" <action> --repo "<repo绝对路径>" --session "<CLAUDE_SESSION_ID>"`。除 init/status 外均附 `--run <status返回的run>`，并使用当前返回的状态；禁止凭旧通知自行编造 run/round。
+所有命令前缀：`python "<team-workflow skill-dir>/scripts/workflow.py" <action> --repo "<repo绝对路径>" --session "<CLAUDE_SESSION_ID>"`。除 init/status/prepare-new 外均附 `--run <status返回的run>`，并使用当前返回的状态；禁止凭旧通知自行编造 run/round。
 
 | action | 附加参数 | 用途 |
 |---|---|---|
@@ -16,6 +16,7 @@
 | wait | `--observed-seq N --timeout 3600` | 原窗口 Bash 后台任务；收到事件或超时仅输出一次 JSON |
 | resume | `--reason "<用户明确续做指令>"` | 原 B 中断恢复，生成单次 resume_token |
 | stop / status / archive | 无 | 停止请求 / 只读 / 用户明确新任务前封存终态 |
+| prepare-new | `--request "<新任务文档或简短标识>" --reason "<本次新任务指令>" [--run <当前run>]` | 当前真实 session 在新任务前自动归档旧任务；无 state 时识别已归档残留。外部维护用 `--actor <实际调用者>` 代替 session，见 §5 |
 | pause | `--reason "<错误或停止原因>"` | 当前执行方已静止后留阻断；A 不可借此抢走正在执行的 B |
 
 退出码 0 表示命令成功，**不代表任务达标**；退出码 1 + TEAM_WORKFLOW_ERROR 表示拒绝。state 的 phase 决定下一步。所有报告/证据/草稿路径必须在 repo 内。B 的执行范围由当前 team-task 与生效合同限定；A 按独立基线验收并把缺口写成自足的下一轮任务。
@@ -26,7 +27,7 @@
 
 ## 1. 外部首轮任务与 A 的验收基准
 
-首轮任务有两条准备路径：讨论窗口（可使用 Codex 或其它工具）先写用户认可的冻结文档和根 team-task.md；或用户只备冻结文档，用 `/team-workflow run <文档>` 让 B 在 init 前自行起草并写入根 team-task.md（`.team-workflow-state.json` 已存在则不起草、转 status/resume；team-task.md 缺失/空白（空白=strip 后无可见字符）才起草并自动创建，非空则一律停下，请用户清理后重跑或去掉参数沿用）。任务应含「本次任务 + done_when」，且不混入旧合同。B 代起草不冻结基线 hash、不生成 criteria，A 的 join 仍独立冻结。首轮 B init 对两条路径一视同仁：接受无标记正文或单一有效 open source；只补标记/规范换行，源正文不改，原始字节存 before-start。旧 progress 为空可直接用新任务；ACTIVE/WAIT_HUMAN 等未收口进度、仍带旧合同或 source 已执行过则拒绝，不能把运行中裸 `/team-task` 硬接管。
+首轮任务有两条准备路径：讨论窗口先备冻结文档和未执行的 team-task.md；或用户给文档，用 `/team-workflow run <文档>` 让 B 起草。明确新任务先走 §5 自动收尾；重复进入同一任务不触发清理。带参 run 在任务缺失/空白时起草，已归档旧任务由 helper 自动核对并清空；不覆盖未经识别的非空任务。B 起草不冻结 A 的基线 hash、不生成 criteria；init 接受无标记正文或单一有效 open source，只加标记/规范换行并保留 before-start 原字节。仍在运行的裸 team-task、旧合同或已执行 source 不得硬接管。
 
 稍后 A 读取用户在 `/team-workflow review <文档> [max-round=N]` 中指定的完整文档，写 criteria-input.json；首次 join 才一起冻结基线 hash、轮数和 criteria.json。不能从 B 的任务、完成报告或自述反推整份基线。这只是提取独立验收判据，不重做首轮执行计划，不要求 B 等它才开工：
 
@@ -105,6 +106,31 @@ Windows 事件采用 double-session 的 AutoResetEvent + repo mutex 思路，代
 - `TIMEOUT`、重复通知和 `WAITER_ALREADY_RUNNING` 按 SKILL 正文处理。
 - killed/异常退出通知到达后，先 status，记录原 task_id、通知所述错误类型和 run/round/phase；只把低内存等原因归于通知陈述，不推断未经遥测的具体宿主故障。若通知要求等请求再启动，遵守该停止指令，不立即无限重挂。
 - 收到明确重挂/resume 请求，或上下文恢复进入原入口时，先 status 核对绑定 session、角色、run、round 和 phase，再结合原 task_id 的完成通知或后台任务状态确认 waiter。status 本身不证明 waiter 存活；仍在则沿用，确已消失且宿主允许重挂、当前仍需等待时才恢复唯一 3600 秒后台 wait；状态不明不创建第二个，已轮到本窗口则按调度表接棒。
-- 宿主已退出或无可处理通知时，由下次入口恢复，不声称后台持续运行；配额等待与业务缺陷分开记录。不能改为定时轮询、自动杀进程、常驻监控或无限重试。非终态孤儿仍交当次获授权的外部维护，不内建通用接管/恢复机制。
+- 宿主已退出或无可处理通知时，由下次入口恢复，不声称后台持续运行；配额等待与业务缺陷分开记录。不能改为定时轮询、自动杀进程、常驻监控或无限重试。明确新任务的非终态孤儿可按 §5 自动退役；需要继续旧业务、状态损坏或超出机械判断的现场仍交外部维护，不内建通用接管/执行恢复机制。
 
 依据：Claude 官方 [Bash 工具参考](https://code.claude.com/docs/en/tools-reference) 与 [后台任务](https://code.claude.com/docs/en/interactive-mode)。交互 session 的后台任务可在主 turn 结束后继续运行并通知原会话；`-p` 的进程结束会终止会话内后台任务。技能变量见 [skills 文档](https://code.claude.com/docs/en/skills)。本机检查版本为 2.1.266；不要把文档支持误写成已通过真实 Claude-GLM 两窗口验收。
+
+## 5. 新任务启动前自动收尾
+
+用户明确发起新任务（含本次已授权的启动请求）时，由 agent 自动执行一次预检收尾；不为旧 run 换窗、复制旧 session ID 或要求用户跑 `!` 命令。仅查状态、重复进入当前任务、续做旧任务不触发归档。新任务不能是通过重命名绕过同一业务的人工门、失败预算或保存 registry。
+
+```text
+python "<skill-dir>/scripts/workflow.py" prepare-new --repo "<repo>" --session "<本窗口真实ID>" --run <当前run> --request "<新任务文档路径或简短标识>" --reason "<用户本次明确新任务意图>"
+```
+
+state 存在时先 status，并传它的实际 run；不存在时省略 `--run`，helper 可识别官方 archive 后遗留的相同字节。由 Codex 等外部 agent 维护时，省略 `--session`、使用 `--actor "Codex"` 如实记录调用者；这只允许新任务前收尾，不获取 A/B 执行权。request/reason 不放账号、凭证或业务敏感值。
+
+| 现场 | 自动动作 |
+|---|---|
+| DONE / LIMIT / CANCELLED | 核对根任务/进度与记录的 hash，保留原状态与最终原文件后归档；终态不要求原绑定窗口存在 |
+| 非终态且原 A/B、相关子进程与 waiter 均已退出 | Windows 进程起点及存活检查＋会话目录/相关进程一次性盘点，核对根任务来源与进度身份；保留原始状态/任务/进度，记 CANCELLED（未完成退役），保留失败计数、合同及全部轮次证据后归档 |
+| 原绑定窗口、相关执行者或 waiter 仍存活，或检查失败/未知 | 停止依赖动作并报告具体占用；不靠 mtime/长时间无消息判死，不杀进程、不冒用 ID。原绑定会话记录消失时使用 init/join/enter 已记录的最小 PID/进程起点；旧 run 两处均无进程依据则报具体缺口，不把空列表当退出证明。当前窗口若就是原执行方，可先按原 stop/pause 流程关闭在途工作，成为终态后再收尾 |
+| state 已由旧 archive 移除，但根文件与该 run 的 final 完全相同 | 自动识别并清空已归档残留，然后起草新任务 |
+| 无旧 state，也无可证明的旧文件归属 | 保留现有草稿；合法未执行草稿按原入口接入，未知非空任务报告冲突 |
+| 同一基线的 PAUSED / LIMIT / 熔断；损坏/旧版状态或归档冲突 | 保留现场与具体原因；归档不能自行解除旧任务门槛 |
+
+每个旧 run 的 `prepare-new/` 保存原 state 原字节、任务/进度与哈希、调用者/新任务依据及 receipt；`final/`、`state-final.json` 为最终归档。旧工件不改，未完成不签 DONE。先可回读归档，再核对并清空**仅属于旧 run**的两个根文件，最后移除活动 state；命令中断重试复用 receipt，发现新草稿/新 run 或备份漂移即拒绝。没有另建守护进程、轮询服务或自动续填机制。
+
+收到 `TEAM_WORKFLOW_NEW_TASK_READY` 后，agent 立即继续准备新首轮并 init，无需用户再确认已授权的收尾。未完成退役时，先读取归档进度、合同和失败历史，把仍影响新任务的成果/缺口/失败 key 带进首轮任务；不虚报旧任务完成，不清预算以重试同一问题。新任务依旧由独立 B 执行、A 加入验收。
+
+此动作只处理 workflow 的 state、team-task、team-progress 和自身归档，不操作 OA 页面、业务 profile 锁/registry/凭证，不证明业务现场已就绪；后续业务执行仍按 repo 的当次身份、锁、registry 与页面规则核实。
