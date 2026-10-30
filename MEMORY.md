@@ -3,6 +3,8 @@
 > 中央知识库（薄）。稳定层 = 人工策展快照，可修正、不污染源 repo。
 > 易变 domain 细节不在此，留各源 repo（见 repo-map）。建于 2026-06-01（Stage 0）。
 
+> **当前客户端入口（2026-10-30）**：用户改用 claude-glm；共享资产与知识母本仍在本 repo，现有 junction 保留。入口与项目记忆消费规则见 [.claude/claude-glm-entry.md](.claude/claude-glm-entry.md)。下方早期账号部署说明是历史记录；当前调用 `/KB-update`、`/mc-update`、`/reflect` 无需原生 Claude。
+
 ## 核心文档
 - [principles.md](principles.md) — 用户决策偏好卡（确定性 Python > LLM / 稳定 > 新颖 / 文档诚实 / 入库判据 / 交互风格·人工门最小化+需求冻结基线 / 环境约束）
 - [reflexes.md](reflexes.md) — 跨 repo 硬反射（Office 路径·目标机折算 / inspect-first / skills-first / 先查再下结论·阳性对照 / done_when 阳性对照 + **验收范围禁缩窄/指标禁替换（09-18）** / 3-fail 熔断 + COM 2 次例外 / 不编辑产物 / Excel checkpoint·机器可读真相走确定性 diff / **MAX_PATH 深路径（09-18）** / `-LiteralPath`+Glob`[` / junction / **junction 判定须 `lstat()`（10-21）** / python3 stub），每条挂命中 repo

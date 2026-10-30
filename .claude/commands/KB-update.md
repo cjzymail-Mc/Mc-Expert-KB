@@ -1,3 +1,5 @@
+> **claude-glm 入口（2026-10-30）**：本命令由当前配置根的 `commands/` junction 发现，物理母本保留在中央 KB。无论从哪个工作 repo 调用，以下「本 repo」都指 `D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo`；先读取该根的 `CLAUDE.md` 与 `MEMORY.md`，文件操作使用该根的绝对路径，不在调用方 repo 创建 KB 内容。源 repo 仍按流程只读。无需原生 Claude 账号；候选审核与晋升权限不变。
+
 中央 KB（本 repo）专用的固化/更新流程。**本 repo 不是普通工作 repo，是被策展的稳定层**——别套用通用 `mc-update`（那套 auto-memory/memory 归属、fix*.md、Mc-debug、STATE.md、feature 目录在这里都不适用）。
 
 > 立身原则：薄 / 稳定 / 人工策展 / 不污染源 repo / 做减法。依据 [[principles]] 入库判据 + [[decisions/kb-memory-boundary]]。

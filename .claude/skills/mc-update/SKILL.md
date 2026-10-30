@@ -9,6 +9,14 @@ description: 任务完成后的文档更新流程——判断要不要固化记�
 > - CLAUDE.md / STATE.md 章节号已去除，改为语义化引用（如"CLAUDE.md 命令表"）。各 repo 跑时按本地编号自行映射。
 > - 第 3 步 4e（顶级文件夹规约）按需触发：repo 有顶级文件夹硬底线才走，无则整段跳过；其中示例为 Agent-4 实际规约，其它 repo 不适用时忽略。
 
+## 入口与读取范围（claude-glm）
+
+本机由 claude-glm 调用；skill 母本仍在中央 KB `.claude/skills/`，通过当前配置根的 `skills/` junction 发现，不能把母本目录名误认成原生 Claude 账号。当前 profile 由 `CLAUDE_CONFIG_DIR` 确定，不回退读 `~/.claude/projects`。
+
+- 普通项目先读当前 repo 的两层 MEMORY 索引，去重时也检查当前 profile 已存在的本项目 harness memory；同一物理目录只算一份。harness 目录是项目级，不称 user-scope 通用记忆。
+- 沿用当前 repo 的既有落点与用户指定；没有消费指针时补薄入口，不自动迁移或合并 memory 目录，不动 junction。
+- 当前 repo 是中央 KB（`D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo`）时，改走其 `/KB-update` 流程；KB inbox 不套用普通项目 auto-memory 归属。
+
 ## 第 0 步：要不要固化？
 
 > 本流程是固化记忆的**唯一入口**（CLAUDE.md §0.2）：只在任务完成后走，任务途中一律不碰

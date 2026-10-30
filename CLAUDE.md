@@ -1,6 +1,6 @@
 # CLAUDE.md — Mc-Expert-repo（中央 KB）操作手册
 
-> 这是**给 KB 策展者**（在本 repo 干活的主 Claude）的薄操作手册 / 导航卡，**不是 KB 内容副本**。
+> 这是**给 KB 策展者**（当前常用入口为 claude-glm）的薄操作手册 / 导航卡，**不是 KB 内容副本**。
 > 知识本身在各源文件，这里只放：定位 + 边界 + 导航 + 节奏。改动前先读 [MEMORY.md](MEMORY.md)。
 
 ## 这是什么
@@ -26,3 +26,7 @@
 - 这是 **D 盘独立 repo、不绑账号**；进 git 可版本化/回滚——保留这两个属性，别引回 junction 依赖。
 
 > ⚠️ 本文件保持**薄**：只指针 + 边界 + 导航。任何 principles/reflexes/decisions 的内容**别复制进来**（会双份漂移，违 `reflexes` 的「别散在 CLAUDE.md」）。
+
+## 本机客户端入口（2026-10-30）
+
+启动 `claude-glm`；`/KB-update` 负责本 KB，普通工作 repo 用 `/mc-update`。共享入口说明见 [.claude/claude-glm-entry.md](.claude/claude-glm-entry.md)。该文件由 `~/.claude-glm/CLAUDE.md` 导入；skills/agents/commands/hooks 的现有 junction 与 KB 物理母本均保留。`.claude` 资产路径不表示必须启动原生 Claude。
