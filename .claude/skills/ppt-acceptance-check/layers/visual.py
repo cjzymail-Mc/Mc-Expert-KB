@@ -19,7 +19,7 @@ from layers.common import Finding, LayerResult
 
 def _import_visual_funcs():
     """复用 ppt-visual-fidelity-check 的函数，避免重写。"""
-    visual_skill = Path.home() / ".claude" / "skills" / "ppt-visual-fidelity-check"
+    visual_skill = Path(__file__).resolve().parents[2] / "ppt-visual-fidelity-check"
     if str(visual_skill) not in sys.path:
         sys.path.insert(0, str(visual_skill))
     from ppt_visual_check import slide_export_png, ssim_compare

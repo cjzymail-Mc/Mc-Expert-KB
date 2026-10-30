@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent.resolve()
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path.home() / ".claude" / "skills" / "office-com-helpers"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "office-com-helpers"))
 
 from contract import Contract
 from layers.behavior import run as run_l4

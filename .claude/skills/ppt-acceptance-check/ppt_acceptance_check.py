@@ -51,7 +51,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 # 把 office-com-helpers 接进来（safe_print 等）
-HELPERS_DIR = Path.home() / ".claude" / "skills" / "office-com-helpers"
+HELPERS_DIR = Path(__file__).resolve().parents[1] / "office-com-helpers"
 if HELPERS_DIR.exists() and str(HELPERS_DIR) not in sys.path:
     sys.path.insert(0, str(HELPERS_DIR))
 

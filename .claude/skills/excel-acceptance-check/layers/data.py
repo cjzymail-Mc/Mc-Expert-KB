@@ -44,7 +44,7 @@ def _excel_col_to_index(col: str) -> int:
 def _load_excel_column(excel_path: str, sheet_kw: str, col: str) -> List[Any]:
     """从外部 excel 取一列原始值（去掉表头第 1 行）。复用 office-com-helpers。"""
     import sys
-    helpers = Path.home() / ".claude" / "skills" / "office-com-helpers"
+    helpers = Path(__file__).resolve().parents[2] / "office-com-helpers"
     if str(helpers) not in sys.path:
         sys.path.insert(0, str(helpers))
     from office_com_helpers import load_excel_rows
@@ -80,7 +80,7 @@ def _load_excel_cell(excel_path: str, sheet_kw: str, a1: str) -> Any:
     本 repo 评审/规格表均如此。若 UsedRange 不从 A1 起，此映射会偏移。
     """
     import sys
-    helpers = Path.home() / ".claude" / "skills" / "office-com-helpers"
+    helpers = Path(__file__).resolve().parents[2] / "office-com-helpers"
     if str(helpers) not in sys.path:
         sys.path.insert(0, str(helpers))
     from office_com_helpers import load_excel_rows

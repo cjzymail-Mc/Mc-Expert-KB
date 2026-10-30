@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 # 复用 office-com-helpers
-_HELPERS = Path.home() / ".claude" / "skills" / "office-com-helpers"
+_HELPERS = Path(__file__).resolve().parents[2] / "office-com-helpers"
 if _HELPERS.exists() and str(_HELPERS) not in sys.path:
     sys.path.insert(0, str(_HELPERS))
 try:
