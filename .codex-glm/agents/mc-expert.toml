@@ -4,7 +4,7 @@
 # 这是 Codex 侧模拟（custom agent），非 Claude 原生 mc-expert subagent——置信度/判断力不等价，调用方需标注。
 name = "mc-expert"
 description = "Native mc-expert custom subagent for KB-backed review. HISTORY provides non-release advice; ENHANCED_FINAL is mandatory for every admitted GLM medium-risk final artifact. GLM high-risk work is rejected with CUTOVER_NATIVE_REQUIRED. Use agent_type=mc-expert and fork_turns=none; inherit the active GLM provider/model; read-only."
-# model not pinned: inherit session model so glm (glm-5.3 / z-ai/glm-5.2) and gpt (gpt-5.6-sol) both work
+# model not pinned: inherit session model so glm (glm-5.4 / z-ai/glm-5.2) and gpt (gpt-5.6-sol) both work
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
