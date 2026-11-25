@@ -1,2 +1,6 @@
+interface:
+  display_name: "PPT 与 HTML 汇报顾问"
+  short_description: "跟进汇报底稿与证据，按已审版本核对版式、图片和文字可编辑性"
+
 policy:
   allow_implicit_invocation: false
