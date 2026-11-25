@@ -21,7 +21,7 @@ COM/Office 底座：`office-com-helpers` `com-survival-reflexes` `ldterm-decrypt
 文档体检/验收：`inspect-{excel,ppt,word}-template` `{excel,ppt}-acceptance-check` `ppt-visual-fidelity-check`(legacy，已被 `ppt-acceptance-check` 取代) `read-selected-shape` `pipeline-self-check-loop`
 染色契约：`three-state-coloring-contract-{excel,word}-only`
 team 执行：`team-task`（`team-task-api` 已于 2026-06-18 归档 → `.claude/skills-archived/team-task-api/`，第二套降级 team 作废）
-会话工程：`new-session`（清空/重开 session 前固化 plan + memory + 状态文件的交接入口）
+会话工程：`session-new`（清空/重开 session 前固化 plan + memory + 状态文件的交接入口）
 脚手架/repo 体检：`mc-scaffold-audit`（原 `claude-md-three-layer-refactor` 升级，CLAUDE.md 三层拆分降为其 L1 子流程）
 
 > 对照面（人工检修工具箱）：`Mc-emoji/--------- ★ Skills ★ ----------/README.md`
