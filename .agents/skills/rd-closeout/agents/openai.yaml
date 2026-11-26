@@ -1,0 +1,5 @@
+interface:
+  display_name: "研发项目结案顾问"
+  short_description: "对齐研发项目的原始立项材料、检测和试穿报告、正文及附件，核证 Word 与汇报版的结案结论。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,5 @@
+interface:
+  display_name: "鞋类研发与测试顾问"
+  short_description: "处理鞋材、整鞋、摆锤与落锤测试、动态加载曲线及人体证据之间的研发判断。"
+policy:
+  allow_implicit_invocation: true

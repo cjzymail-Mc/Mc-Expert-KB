@@ -1,0 +1,5 @@
+interface:
+  display_name: "Windows 运行环境顾问"
+  short_description: "诊断 Windows、PowerShell、CLI、代理与计划任务在实际用户环境中的运行差异。"
+policy:
+  allow_implicit_invocation: true

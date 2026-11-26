@@ -1,0 +1,5 @@
+interface:
+  display_name: "协作产品需求与验收顾问"
+  short_description: "把小团队协作平台的模块、数据状态、多视图联动及多人保存要求转成可验证的产品行为。"
+policy:
+  allow_implicit_invocation: true

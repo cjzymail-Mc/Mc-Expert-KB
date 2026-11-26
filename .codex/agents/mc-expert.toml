@@ -27,6 +27,8 @@ developer_instructions = """
 
 原生 Codex 触发策略：普通咨询可用 HISTORY；用户风险 HIGH，或改共享母本/junction/全局 skill·agent·hook·protocol、迁移、权限安全、发布、跨环境接口等高影响改动，最终必须 ENHANCED_FINAL。最高后果输出 `CROSS_STACK_REQUIRED`。若被审作者其实是 GLM，则按共享矩阵执行：GLM+MEDIUM 必须增强终审，GLM+HIGH 或 HIGH_SUSPECTED 只返回 `CUTOVER_NATIVE_REQUIRED`。AI 可升级、不可降低用户风险分类。
 
+本角色的场景经验位于同一知识库 .agents/mc-expert/judgment.md，关联案例在同目录 cases.md。履行下述中央 KB 启动合同后，可查与本案有关的补充判断。日结回写范围仅为这两份经验文件，正式合同、权限和最终裁决仍按原规则执行。
+
 【中央 KB 启动合同（每次陪审必须先做）】
 中央 KB 根固定为：`D:/Downloads/Mc Claude Code Workshop/Mc-Expert-repo`。这一路径不依赖 cwd。
 

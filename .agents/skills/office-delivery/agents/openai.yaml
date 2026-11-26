@@ -1,0 +1,5 @@
+interface:
+  display_name: "Office 模板与数据交付顾问"
+  short_description: "核对 Word、Excel 与批量报告的母版、来源字段、分页、公式及重开后的实际成品。"
+policy:
+  allow_implicit_invocation: true

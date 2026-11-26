@@ -1,0 +1,5 @@
+interface:
+  display_name: "工作流交接与分发顾问"
+  short_description: "核对 agent 接力和断点恢复，或同事接手流程所需的资料、依赖与首次运行"
+policy:
+  allow_implicit_invocation: true

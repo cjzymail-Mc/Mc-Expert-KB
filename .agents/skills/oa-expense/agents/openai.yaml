@@ -1,0 +1,5 @@
+interface:
+  display_name: "OA 单据与报销顾问"
+  short_description: "核对报销凭证、行程单、费用归属和 OA 字段，按当次授权验证草稿与提交状态。"
+policy:
+  allow_implicit_invocation: true
